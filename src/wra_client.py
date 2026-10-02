@@ -1,4 +1,4 @@
-from __future__ import annotations
+from future import annotations
 
 import json
 from pathlib import Path
@@ -8,343 +8,557 @@ import requests
 
 from config import HTTP_TIMEOUT, USER_AGENT
 
-
 class WRAClient:
+"""
+HTTP client for Water Resources Agency (WRA) APIs.
 
-    def __init__(
-        self,
-        timeout: int = HTTP_TIMEOUT,
-    ) -> None:
+This client is intentionally diagnostic-friendly:
+- Prints the original URL and parameters.
+- Builds a PreparedRequest before sending.
+- Prints the exact Prepared URL.
+- Saves response headers.
+- Saves error response bodies.
+- Saves successful binary responses.
+- Saves RasterMepMetaData when provided.
+"""
 
-        self.timeout = timeout
+def __init__(
+    self,
+    timeout: int = HTTP_TIMEOUT,
+) -> None:
 
-        self.session = requests.Session()
+    self.timeout = timeout
 
-        self.session.headers.update({
+    self.session = requests.Session()
+
+    self.session.headers.update({
+        "User-Agent": USER_AGENT,
+        "Accept": "*/*",
+    })
+
+# =====================================================
+# Internal helpers
+# =====================================================
+
+@staticmethod
+def _write_json(
+    path: Path,
+    data: Any,
+) -> None:
+    """
+    Write UTF-8 JSON with readable indentation.
+    """
+
+    path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    path.write_text(
+        json.dumps(
+            data,
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+@staticmethod
+def _write_text(
+    path: Path,
+    text: str,
+) -> None:
+    """
+    Write UTF-8 text.
+    """
+
+    path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    path.write_text(
+        text,
+        encoding="utf-8",
+    )
+
+@staticmethod
+def _headers_to_dict(
+    headers: requests.structures.CaseInsensitiveDict[str],
+) -> dict[str, str]:
+    """
+    Convert requests headers to a normal dictionary.
+    """
+
+    return {
+        str(key): str(value)
+        for key, value in headers.items()
+    }
+
+# =====================================================
+# GET
+# =====================================================
+
+def get(
+    self,
+    url: str,
+    output_file: Path,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    Perform a GET request and save the response.
+
+    Parameters
+    ----------
+    url:
+        WRA API endpoint.
+
+    output_file:
+        Destination for successful response body.
+
+    params:
+        Query-string parameters.
+
+    Returns
+    -------
+    dict[str, Any]
+        Diagnostic information about the response.
+
+    Raises
+    ------
+    RuntimeError
+        When the HTTP request fails or the WRA API
+        returns a non-2xx status code.
+    """
+
+    print()
+    print("=" * 70)
+    print("[WRA] HTTP REQUEST")
+    print("=" * 70)
+
+    print(
+        "[WRA] METHOD:",
+        "GET",
+    )
+
+    print(
+        "[WRA] URL:",
+        url,
+    )
+
+    print(
+        "[WRA] PARAMS:",
+        json.dumps(
+            params,
+            ensure_ascii=False,
+            indent=2,
+        ),
+    )
+
+    print(
+        "[WRA] OUTPUT:",
+        output_file,
+    )
+
+    # ==================================================
+    # Build PreparedRequest
+    # ==================================================
+
+    request = requests.Request(
+        method="GET",
+        url=url,
+        params=params,
+        headers={
             "User-Agent": USER_AGENT,
             "Accept": "*/*",
-        })
+        },
+    )
 
-
-    def get(
-        self,
-        url: str,
-        output_file: Path,
-        params: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-
-        print()
-        print("=" * 70)
-        print("[WRA] HTTP REQUEST")
-        print("=" * 70)
-
-        print(
-            "[WRA] URL:",
-            url,
-        )
-
-        print(
-            "[WRA] PARAMS:",
-            json.dumps(
-                params,
-                ensure_ascii=False,
-                indent=2,
-            ),
-        )
-
-
-        # ==================================================
-        # Build PreparedRequest first
-        # ==================================================
-
-        request = requests.Request(
-            method="GET",
-            url=url,
-            params=params,
-            headers={
-                "User-Agent": USER_AGENT,
-                "Accept": "*/*",
-            },
-        )
+    try:
 
         prepared = self.session.prepare_request(
             request
         )
 
+    except requests.RequestException as exc:
 
+        print()
         print(
-            "[WRA] PREPARED URL:",
-            prepared.url,
+            "[WRA] PREPARE REQUEST FAILED:"
         )
 
-
         print(
-            "[WRA] PREPARED HEADERS:",
-            json.dumps(
-                dict(prepared.headers),
-                ensure_ascii=False,
-                indent=2,
-            ),
+            repr(exc)
         )
 
+        raise RuntimeError(
+            f"Failed to prepare WRA request: {exc}"
+        ) from exc
 
-        # ==================================================
-        # Send request
-        # ==================================================
+    # ==================================================
+    # Prepared request diagnostics
+    # ==================================================
 
-        try:
+    print()
+    print("=" * 70)
+    print("[WRA] PREPARED REQUEST")
+    print("=" * 70)
 
-            response = self.session.send(
-                prepared,
-                timeout=self.timeout,
-            )
+    print(
+        "[WRA] PREPARED METHOD:",
+        prepared.method,
+    )
 
-        except requests.RequestException as exc:
+    print(
+        "[WRA] PREPARED URL:",
+        prepared.url,
+    )
 
-            print()
-            print(
-                "[WRA] REQUEST EXCEPTION:"
-            )
+    if "?" in prepared.url:
 
-            print(
-                repr(exc)
-            )
+        prepared_query = (
+            prepared.url.split(
+                "?",
+                1,
+            )[1]
+        )
 
-            raise RuntimeError(
-                f"WRA request failed: {exc}"
-            ) from exc
+    else:
 
+        prepared_query = "(none)"
 
-        # ==================================================
-        # Response information
-        # ==================================================
+    print(
+        "[WRA] PREPARED QUERY:",
+        prepared_query,
+    )
+
+    print(
+        "[WRA] PREPARED HEADERS:",
+        json.dumps(
+            dict(prepared.headers),
+            ensure_ascii=False,
+            indent=2,
+        ),
+    )
+
+    # ==================================================
+    # Send request
+    # ==================================================
+
+    try:
+
+        response = self.session.send(
+            prepared,
+            timeout=self.timeout,
+        )
+
+    except requests.RequestException as exc:
 
         print()
         print("=" * 70)
-        print("[WRA] HTTP RESPONSE")
+        print("[WRA] REQUEST EXCEPTION")
         print("=" * 70)
 
         print(
-            "[WRA] RESPONSE URL:",
-            response.url,
+            "[WRA] exception:",
+            repr(exc),
         )
 
-        print(
-            "[WRA] STATUS:",
-            response.status_code,
-        )
+        raise RuntimeError(
+            "WRA HTTP request failed: "
+            f"{exc}"
+        ) from exc
 
-        print(
-            "[WRA] CONTENT-TYPE:",
-            response.headers.get(
-                "Content-Type"
+    # ==================================================
+    # Response diagnostics
+    # ==================================================
+
+    print()
+    print("=" * 70)
+    print("[WRA] HTTP RESPONSE")
+    print("=" * 70)
+
+    print(
+        "[WRA] RESPONSE URL:",
+        response.url,
+    )
+
+    print(
+        "[WRA] STATUS:",
+        response.status_code,
+    )
+
+    print(
+        "[WRA] REASON:",
+        response.reason,
+    )
+
+    print(
+        "[WRA] OK:",
+        response.ok,
+    )
+
+    print(
+        "[WRA] CONTENT-TYPE:",
+        response.headers.get(
+            "Content-Type"
+        ),
+    )
+
+    print(
+        "[WRA] CONTENT-LENGTH HEADER:",
+        response.headers.get(
+            "Content-Length"
+        ),
+    )
+
+    print(
+        "[WRA] RESPONSE SIZE:",
+        len(response.content),
+        "bytes",
+    )
+
+    print(
+        "[WRA] RESPONSE HEADERS:",
+        json.dumps(
+            self._headers_to_dict(
+                response.headers
             ),
-        )
+            ensure_ascii=False,
+            indent=2,
+        ),
+    )
+
+    # ==================================================
+    # Prepare output directory
+    # ==================================================
+
+    output_file.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    # ==================================================
+    # Save response headers
+    # ==================================================
+
+    headers_file = output_file.with_suffix(
+        output_file.suffix
+        + ".headers.json"
+    )
+
+    self._write_json(
+        headers_file,
+        self._headers_to_dict(
+            response.headers
+        ),
+    )
+
+    # ==================================================
+    # Error response
+    # ==================================================
+
+    if not response.ok:
+
+        print()
+        print("=" * 70)
+        print("[WRA] ERROR RESPONSE")
+        print("=" * 70)
+
+        error_text = response.text
 
         print(
-            "[WRA] CONTENT-LENGTH:",
-            response.headers.get(
-                "Content-Length"
-            ),
+            error_text[:10000]
         )
 
-        print(
-            "[WRA] RESPONSE SIZE:",
-            len(response.content),
-            "bytes",
+        # ----------------------------------------------
+        # Save raw error body
+        # ----------------------------------------------
+
+        error_file = output_file.with_suffix(
+            output_file.suffix
+            + ".error.txt"
         )
 
-
-        # ==================================================
-        # Prepare output directory
-        # ==================================================
-
-        output_file.parent.mkdir(
-            parents=True,
-            exist_ok=True,
+        self._write_text(
+            error_file,
+            error_text,
         )
 
+        # ----------------------------------------------
+        # Try JSON error body
+        # ----------------------------------------------
 
-        # ==================================================
-        # Save headers
-        # ==================================================
+        error_json_file = output_file.with_suffix(
+            output_file.suffix
+            + ".error.json"
+        )
 
-        headers_file = (
-            output_file.with_suffix(
-                output_file.suffix
-                + ".headers.json"
+        error_json: Any | None = None
+
+        try:
+
+            error_json = response.json()
+
+        except ValueError:
+
+            error_json = None
+
+        if error_json is not None:
+
+            self._write_json(
+                error_json_file,
+                error_json,
             )
+
+        # ----------------------------------------------
+        # Diagnostic information
+        # ----------------------------------------------
+
+        print()
+        print(
+            "[WRA] ERROR FILE:",
+            error_file,
         )
 
-        headers = {
-            key: value
-            for key, value
-            in response.headers.items()
-        }
-
-        headers_file.write_text(
-            json.dumps(
-                headers,
-                ensure_ascii=False,
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
-
-
-        # ==================================================
-        # Error response
-        # ==================================================
-
-        if not response.ok:
-
-            print()
-            print("=" * 70)
-            print("[WRA] ERROR RESPONSE")
-            print("=" * 70)
+        if error_json is not None:
 
             print(
-                response.text[:10000]
+                "[WRA] ERROR JSON FILE:",
+                error_json_file,
             )
 
+        # ----------------------------------------------
+        # Raise exception
+        # ----------------------------------------------
 
-            error_file = (
-                output_file.with_suffix(
-                    output_file.suffix
-                    + ".error.txt"
-                )
-            )
-
-            error_file.write_text(
-                response.text,
-                encoding="utf-8",
-            )
-
-
-            try:
-
-                error_json = response.json()
-
-                error_json_file = (
-                    output_file.with_suffix(
-                        output_file.suffix
-                        + ".error.json"
-                    )
-                )
-
-                error_json_file.write_text(
-                    json.dumps(
-                        error_json,
-                        ensure_ascii=False,
-                        indent=2,
-                    ),
-                    encoding="utf-8",
-                )
-
-            except ValueError:
-
-                pass
-
-
-            raise RuntimeError(
-                "WRA API request failed: "
-                f"HTTP {response.status_code}\n"
-                f"URL: {response.url}\n"
-                f"Response: "
-                f"{response.text[:5000]}"
-            )
-
-
-        # ==================================================
-        # Save successful response
-        # ==================================================
-
-        output_file.write_bytes(
-            response.content
+        raise RuntimeError(
+            "WRA API request failed.\n"
+            f"HTTP status: {response.status_code}\n"
+            f"Reason: {response.reason}\n"
+            f"Prepared URL: {prepared.url}\n"
+            f"Response URL: {response.url}\n"
+            f"Response: {error_text[:5000]}"
         )
 
+    # ==================================================
+    # Successful response
+    # ==================================================
 
-        # ==================================================
-        # Raster metadata
-        # ==================================================
+    print()
+    print(
+        "[WRA] HTTP request succeeded."
+    )
 
-        metadata_raw = (
-            response.headers.get(
-                "RasterMepMetaData"
-            )
+    # ==================================================
+    # Save successful response body
+    # ==================================================
+
+    output_file.write_bytes(
+        response.content
+    )
+
+    print(
+        "[WRA] BODY FILE:",
+        output_file,
+    )
+
+    # ==================================================
+    # RasterMepMetaData
+    # ==================================================
+    #
+    # WRA raster APIs may provide raster metadata
+    # through this response header.
+    #
+    # Note:
+    # The WRA API currently spells this header as
+    # "RasterMepMetaData".
+    #
+    # ==================================================
+
+    metadata_raw = response.headers.get(
+        "RasterMepMetaData"
+    )
+
+    metadata_file = output_file.with_suffix(
+        output_file.suffix
+        + ".metadata.json"
+    )
+
+    metadata: Any | None = None
+
+    if metadata_raw:
+
+        print()
+        print(
+            "[WRA] RasterMepMetaData found."
         )
 
-        metadata_file = (
-            output_file.with_suffix(
-                output_file.suffix
-                + ".metadata.json"
+        try:
+
+            metadata = json.loads(
+                metadata_raw
             )
-        )
 
-        metadata = None
-
-
-        if metadata_raw:
+            self._write_json(
+                metadata_file,
+                metadata,
+            )
 
             print(
-                "[WRA] RasterMepMetaData found."
+                "[WRA] METADATA FILE:",
+                metadata_file,
             )
 
-            try:
-
-                metadata = json.loads(
-                    metadata_raw
-                )
-
-                metadata_file.write_text(
-                    json.dumps(
-                        metadata,
-                        ensure_ascii=False,
-                        indent=2,
-                    ),
-                    encoding="utf-8",
-                )
-
-            except json.JSONDecodeError:
-
-                metadata_file.write_text(
-                    metadata_raw,
-                    encoding="utf-8",
-                )
-
-                metadata = metadata_raw
-
-        else:
+        except json.JSONDecodeError:
 
             print(
                 "[WRA] RasterMepMetaData "
-                "header not found."
+                "is not valid JSON."
             )
 
+            self._write_text(
+                metadata_file,
+                metadata_raw,
+            )
 
-        return {
+            metadata = metadata_raw
 
-            "url":
-                response.url,
+            print(
+                "[WRA] RAW METADATA FILE:",
+                metadata_file,
+            )
 
-            "status_code":
-                response.status_code,
+    else:
 
-            "content_type":
-                response.headers.get(
-                    "Content-Type"
-                ),
+        print(
+            "[WRA] RasterMepMetaData "
+            "header not found."
+        )
 
-            "content_length":
-                len(response.content),
+    # ==================================================
+    # Return diagnostic result
+    # ==================================================
 
-            "metadata":
-                metadata,
-
-            "body_file":
-                str(output_file),
-
-            "headers_file":
-                str(headers_file),
-        }
-    
+    return {
+        "url": response.url,
+        "prepared_url": prepared.url,
+        "method": prepared.method,
+        "params": params,
+        "status_code": response.status_code,
+        "reason": response.reason,
+        "ok": response.ok,
+        "content_type": response.headers.get(
+            "Content-Type"
+        ),
+        "content_length": len(
+            response.content
+        ),
+        "metadata": metadata,
+        "body_file": str(
+            output_file
+        ),
+        "headers_file": str(
+            headers_file
+        ),
+    }
