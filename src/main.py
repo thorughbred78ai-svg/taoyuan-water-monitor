@@ -7,6 +7,7 @@ from config import (
     INUNDATION_URL,
     LATEST_DIR,
     PRECIPITATION_URL,
+    RAINFALL_CUMULATIVE_HOURS,
     RAW_DIR,
 )
 
@@ -45,6 +46,7 @@ def test_api(
     name: str,
     url: str,
     output_file,
+    params: dict | None = None,
 ) -> dict:
 
     print()
@@ -54,16 +56,33 @@ def test_api(
     )
     print("=" * 70)
 
+    print(
+        "[WRA] URL:",
+        url,
+    )
+
+    if params:
+
+        print(
+            "[WRA] params:",
+            json.dumps(
+                params,
+                ensure_ascii=False,
+            ),
+        )
+
     try:
 
         result = client.get(
-            url,
-            output_file,
+            url=url,
+            output_file=output_file,
+            params=params,
         )
 
         return {
             "success": True,
             "url": url,
+            "params": params,
             "result": result,
         }
 
@@ -81,6 +100,7 @@ def test_api(
         return {
             "success": False,
             "url": url,
+            "params": params,
             "error": str(exc),
         }
 
@@ -88,8 +108,14 @@ def test_api(
 def main():
 
     print("=" * 70)
-    print("Taoyuan Water Monitor - WRA API Diagnostic")
+    print(
+        "Taoyuan Water Monitor"
+    )
+    print(
+        "WRA API Diagnostic"
+    )
     print("=" * 70)
+
 
     LATEST_DIR.mkdir(
         parents=True,
@@ -106,10 +132,11 @@ def main():
 
 
     # ==================================================
-    # Rainfall
+    # 1. Rainfall
     # ==================================================
 
     rainfall = test_api(
+
         client=client,
 
         name="precipitation",
@@ -120,14 +147,20 @@ def main():
             RAW_DIR
             / "rainfall.bin"
         ),
+
+        params={
+            "cumulativeHours":
+                RAINFALL_CUMULATIVE_HOURS
+        },
     )
 
 
     # ==================================================
-    # Inundation
+    # 2. Inundation
     # ==================================================
 
     inundation = test_api(
+
         client=client,
 
         name="inundation",
@@ -142,7 +175,7 @@ def main():
 
 
     # ==================================================
-    # Summary
+    # 3. Summary
     # ==================================================
 
     status = {
@@ -165,6 +198,7 @@ def main():
 
 
     save_json(
+
         LATEST_DIR
         / "status.json",
 
@@ -174,7 +208,9 @@ def main():
 
     print()
     print("=" * 70)
-    print("Diagnostic summary")
+    print(
+        "Diagnostic summary"
+    )
     print("=" * 70)
 
 
@@ -187,19 +223,11 @@ def main():
     )
 
 
-    # ==================================================
-    # Important:
-    #
-    # Don't fail immediately after rainfall.
-    # Both APIs have been tested.
-    #
-    # At the end, fail the Action if either failed.
-    # ==================================================
-
     rainfall_ok = (
         rainfall.get("success")
         is True
     )
+
 
     inundation_ok = (
         inundation.get("success")
@@ -241,3 +269,4 @@ def main():
 if __name__ == "__main__":
 
     main()
+
