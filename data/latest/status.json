@@ -1,15 +1,36 @@
 {
-  "updated_at": "2026-10-02T10:41:09.759662+00:00",
+  "updated_at": "2026-10-02T10:46:36.613412+00:00",
   "city": "桃園市",
   "mode": "diagnostic",
-  "rainfall": {
+  "boundary": {
+    "file": "/home/runner/work/taoyuan-water-monitor/taoyuan-water-monitor/data/boundary/taoyuan_districts.geojson",
+    "exists": true,
     "success": true,
-    "url": "https://iot.wra.gov.tw/rasterMap/precipitation?cumulativeHours=1",
-    "params": {
+    "crs": "EPSG:4326",
+    "feature_count": 13,
+    "columns": [
+      "TOWNID",
+      "TOWNCODE",
+      "COUNTYNAME",
+      "TOWNNAME",
+      "TOWNENG",
+      "COUNTYID",
+      "COUNTYCODE",
+      "geometry"
+    ]
+  },
+  "rainfall": {
+    "endpoint": "https://iot.wra.gov.tw/rasterMap/precipitation",
+    "parameters": {
       "cumulativeHours": 1
     },
     "result": {
+      "success": true,
+      "name": "precipitation",
       "url": "https://iot.wra.gov.tw/rasterMap/precipitation?cumulativeHours=1",
+      "params": {
+        "cumulativeHours": 1
+      },
       "status_code": 200,
       "content_type": "application/octet-stream",
       "content_length": 10562,
@@ -19,11 +40,13 @@
     }
   },
   "inundation": {
-    "success": true,
-    "url": "https://iot.wra.gov.tw/rasterMap/inundation",
-    "params": null,
+    "endpoint": "https://iot.wra.gov.tw/rasterMap/inundation",
+    "parameters": null,
     "result": {
+      "success": true,
+      "name": "inundation",
       "url": "https://iot.wra.gov.tw/rasterMap/inundation",
+      "params": null,
       "status_code": 200,
       "content_type": "application/json; charset=utf-8",
       "content_length": 72,
