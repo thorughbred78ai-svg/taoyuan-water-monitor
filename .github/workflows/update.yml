@@ -137,6 +137,7 @@ jobs:
           python -m py_compile \
             src/config.py \
             src/wra_client.py \
+            src/rainfall_processor.py \
             src/main.py
 
 
