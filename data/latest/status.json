@@ -1,10 +1,10 @@
 {
-  "updated_at": "2026-10-02T10:28:28.096650+00:00",
+  "updated_at": "2026-10-02T10:37:04.626608+00:00",
   "city": "桃園市",
   "mode": "diagnostic",
   "rainfall": {
     "success": true,
-    "url": "https://iot.wra.gov.tw/rasterMap/precipitation",
+    "url": "https://iot.wra.gov.tw/rasterMap/precipitation?cumulativeHours=1",
     "params": {
       "cumulativeHours": 1
     },
