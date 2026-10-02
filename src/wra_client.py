@@ -30,18 +30,37 @@ class WRAClient:
         self,
         url: str,
         output_file: Path,
+        params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
 
         print("=" * 70)
         print("[WRA] Request")
         print("=" * 70)
 
-        print(f"[WRA] GET {url}")
+        print(
+            "[WRA] GET",
+            url,
+        )
+
+        if params:
+
+            print(
+                "[WRA] params:",
+                json.dumps(
+                    params,
+                    ensure_ascii=False,
+                ),
+            )
+
 
         try:
 
             response = self.session.get(
+
                 url,
+
+                params=params,
+
                 timeout=self.timeout,
             )
 
@@ -59,6 +78,11 @@ class WRAClient:
                 f"WRA request failed: {exc}"
             ) from exc
 
+
+        print(
+            "[WRA] final URL:",
+            response.url,
+        )
 
         print(
             "[WRA] status:",
@@ -86,14 +110,19 @@ class WRAClient:
         )
 
 
-        # --------------------------------------------------
-        # Save HTTP headers regardless of status
-        # --------------------------------------------------
+        # ==================================================
+        # Prepare output directory
+        # ==================================================
 
         output_file.parent.mkdir(
             parents=True,
             exist_ok=True,
         )
+
+
+        # ==================================================
+        # Save response headers
+        # ==================================================
 
         headers_file = output_file.with_suffix(
             output_file.suffix
@@ -116,9 +145,9 @@ class WRAClient:
         )
 
 
-        # --------------------------------------------------
-        # Handle HTTP error
-        # --------------------------------------------------
+        # ==================================================
+        # HTTP error
+        # ==================================================
 
         if not response.ok:
 
@@ -126,7 +155,9 @@ class WRAClient:
             print(
                 "[WRA] ERROR RESPONSE:"
             )
+
             print("-" * 70)
+
 
             try:
 
@@ -146,13 +177,19 @@ class WRAClient:
                     response.text[:10000]
                 )
 
+
             print("-" * 70)
 
 
-            # Save error response
-            error_file = output_file.with_suffix(
-                output_file.suffix
-                + ".error.txt"
+            # ----------------------------------------------
+            # Save raw error
+            # ----------------------------------------------
+
+            error_file = (
+                output_file.with_suffix(
+                    output_file.suffix
+                    + ".error.txt"
+                )
             )
 
             error_file.write_text(
@@ -161,7 +198,10 @@ class WRAClient:
             )
 
 
-            # Also save parsed JSON if possible
+            # ----------------------------------------------
+            # Save JSON error
+            # ----------------------------------------------
+
             try:
 
                 error_json = response.json()
@@ -183,30 +223,31 @@ class WRAClient:
                 )
 
             except ValueError:
+
                 pass
 
 
             raise RuntimeError(
                 "WRA API request failed: "
                 f"HTTP {response.status_code}\n"
-                f"URL: {url}\n"
+                f"URL: {response.url}\n"
                 f"Response: "
                 f"{response.text[:5000]}"
             )
 
 
-        # --------------------------------------------------
-        # Save successful response body
-        # --------------------------------------------------
+        # ==================================================
+        # Save successful response
+        # ==================================================
 
         output_file.write_bytes(
             response.content
         )
 
 
-        # --------------------------------------------------
-        # RasterMepMetaData
-        # --------------------------------------------------
+        # ==================================================
+        # Raster metadata
+        # ==================================================
 
         metadata_raw = (
             response.headers.get(
@@ -214,10 +255,14 @@ class WRAClient:
             )
         )
 
-        metadata_file = output_file.with_suffix(
-            output_file.suffix
-            + ".metadata.json"
+
+        metadata_file = (
+            output_file.with_suffix(
+                output_file.suffix
+                + ".metadata.json"
+            )
         )
+
 
         metadata = None
 
@@ -265,12 +310,14 @@ class WRAClient:
             )
 
 
-        # --------------------------------------------------
-        # Return information
-        # --------------------------------------------------
+        # ==================================================
+        # Return
+        # ==================================================
 
         return {
-            "url": url,
+
+            "url":
+                response.url,
 
             "status_code":
                 response.status_code,
@@ -292,4 +339,3 @@ class WRAClient:
             "headers_file":
                 str(headers_file),
         }
-
