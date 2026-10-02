@@ -400,8 +400,9 @@ class WRAClient:
         # Raster metadata
         # ==================================================
 
-        metadata_raw = response.headers.get(
-            "RasterMapMetaData"
+        metadata_raw = (
+            response.headers.get("RasterMapMetaData")
+            or response.headers.get("RasterMepMetaData")
         )
 
         metadata_file = output_file.with_suffix(
