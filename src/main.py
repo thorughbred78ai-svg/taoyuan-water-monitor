@@ -15,7 +15,6 @@ from wra_client import WRAClient
 
 
 def now_iso() -> str:
-
     return datetime.now(
         timezone.utc
     ).isoformat()
@@ -51,9 +50,7 @@ def test_api(
 
     print()
     print("=" * 70)
-    print(
-        f"Testing WRA {name}"
-    )
+    print(f"Testing WRA {name}")
     print("=" * 70)
 
     print(
@@ -61,15 +58,23 @@ def test_api(
         url,
     )
 
-    if params:
+    if params is not None:
 
         print(
             "[WRA] params:",
             json.dumps(
                 params,
                 ensure_ascii=False,
+                indent=2,
             ),
         )
+
+    else:
+
+        print(
+            "[WRA] params: None"
+        )
+
 
     try:
 
@@ -81,7 +86,10 @@ def test_api(
 
         return {
             "success": True,
-            "url": url,
+            "url": result.get(
+                "url",
+                url,
+            ),
             "params": params,
             "result": result,
         }
@@ -108,12 +116,8 @@ def test_api(
 def main():
 
     print("=" * 70)
-    print(
-        "Taoyuan Water Monitor"
-    )
-    print(
-        "WRA API Diagnostic"
-    )
+    print("Taoyuan Water Monitor")
+    print("WRA API Diagnostic")
     print("=" * 70)
 
 
@@ -135,6 +139,20 @@ def main():
     # 1. Rainfall
     # ==================================================
 
+    rainfall_params = {
+        "cumulativeHours": int(
+            RAINFALL_CUMULATIVE_HOURS
+        )
+    }
+
+
+    print()
+    print(
+        "[CONFIG] RAINFALL_CUMULATIVE_HOURS =",
+        RAINFALL_CUMULATIVE_HOURS,
+    )
+
+
     rainfall = test_api(
 
         client=client,
@@ -148,10 +166,7 @@ def main():
             / "rainfall.bin"
         ),
 
-        params={
-            "cumulativeHours":
-                RAINFALL_CUMULATIVE_HOURS
-        },
+        params=rainfall_params,
     )
 
 
@@ -171,6 +186,8 @@ def main():
             RAW_DIR
             / "inundation.bin"
         ),
+
+        params=None,
     )
 
 
@@ -198,21 +215,15 @@ def main():
 
 
     save_json(
-
-        LATEST_DIR
-        / "status.json",
-
+        LATEST_DIR / "status.json",
         status,
     )
 
 
     print()
     print("=" * 70)
-    print(
-        "Diagnostic summary"
-    )
+    print("Diagnostic summary")
     print("=" * 70)
-
 
     print(
         json.dumps(
@@ -227,7 +238,6 @@ def main():
         rainfall.get("success")
         is True
     )
-
 
     inundation_ok = (
         inundation.get("success")
@@ -256,7 +266,7 @@ def main():
 
         raise RuntimeError(
             "One or more WRA APIs failed. "
-            "See the diagnostic output above."
+            "See diagnostic output above."
         )
 
 
@@ -267,6 +277,4 @@ def main():
 
 
 if __name__ == "__main__":
-
     main()
-
