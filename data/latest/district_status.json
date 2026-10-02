@@ -1,0 +1,16 @@
+{
+  "updated_at": "2026-10-02T16:30:00+08:00",
+  "city": "桃園市",
+  "districts": [
+    {
+      "name": "桃園區",
+      "rainfall_mm": 38.5,
+      "inundation_area_km2": 0.00
+    },
+    {
+      "name": "中壢區",
+      "rainfall_mm": 62.0,
+      "inundation_area_km2": 0.13
+    }
+  ]
+}
