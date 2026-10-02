@@ -1,6 +1,5 @@
 from future import annotations
 
-import io
 import json
 from pathlib import Path
 from typing import Any
@@ -14,9 +13,7 @@ from rasterio.transform import from_bounds
 
 TAIWAN_TM2_121 = "EPSG:3826"
 
-def load_metadata(
-metadata_file: Path,
-) -> dict[str, Any]:
+def load_metadata(metadata_file: Path) -> dict[str, Any]:
 """Load WRA RasterMapMetaData."""
 
 if not metadata_file.exists():
@@ -55,14 +52,12 @@ if missing:
 return data
 
 
-def inspect_png(
-raster_file: Path,
-) -> dict[str, Any]:
+def inspect_png(raster_file: Path) -> dict[str, Any]:
 """
-Inspect the downloaded PNG.
+Inspect the downloaded WRA PNG.
 
-This intentionally does not assume that RGB/color
-values represent rainfall in millimetres.
+Do not assume RGB/color values are rainfall
+millimetres.
 """
 
 if not raster_file.exists():
@@ -72,19 +67,22 @@ if not raster_file.exists():
 
 data = raster_file.read_bytes()
 
-if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+png_signature = b"\x89PNG\r\n\x1a\n"
+
+if not data.startswith(png_signature):
     raise ValueError(
         "WRA rainfall file is not a PNG."
     )
 
 with MemoryFile(data) as memfile:
     with memfile.open() as src:
-        result = {
+
+        return {
             "driver": src.driver,
             "width": src.width,
             "height": src.height,
             "count": src.count,
-            "dtype": src.dtypes,
+            "dtype": list(src.dtypes),
             "colorinterp": [
                 str(value)
                 for value in src.colorinterp
@@ -101,8 +99,6 @@ with MemoryFile(data) as memfile:
             ],
         }
 
-        return result
-
 
 def build_georeferenced_raster(
 raster_file: Path,
@@ -110,9 +106,9 @@ metadata_file: Path,
 output_tif: Path,
 ) -> dict[str, Any]:
 """
-Convert the WRA PNG into a georeferenced GeoTIFF.
+Convert WRA PNG into a georeferenced GeoTIFF.
 
-The WRA metadata supplies the projected bounding box.
+WRA metadata supplies the projected bounding box.
 """
 
 metadata = load_metadata(
@@ -127,7 +123,6 @@ if metadata["IsEmptyRasterMap"]:
 png_data = raster_file.read_bytes()
 
 with MemoryFile(png_data) as memfile:
-
     with memfile.open() as src:
 
         transform = from_bounds(
@@ -139,7 +134,7 @@ with MemoryFile(png_data) as memfile:
             src.height,
         )
 
-        output_file.parent.mkdir(
+        output_tif.parent.mkdir(
             parents=True,
             exist_ok=True,
         )
@@ -156,50 +151,38 @@ with MemoryFile(png_data) as memfile:
         )
 
         with rasterio.open(
-            output_file,
+            output_tif,
             "w",
             **profile,
         ) as dst:
 
-            for band in range(
+            for band_number in range(
                 1,
                 src.count + 1,
             ):
                 dst.write(
-                    src.read(band),
-                    band,
+                    src.read(band_number),
+                    band_number,
                 )
 
 return {
-    "file": str(output_file),
+    "file": str(output_tif),
     "crs": TAIWAN_TM2_121,
-    "width": int(
-        metadata["Width"]
-    ),
-    "height": int(
-        metadata["Height"]
-    ),
+    "width": int(metadata["Width"]),
+    "height": int(metadata["Height"]),
     "bounds": {
-        "left": float(
-            metadata["ULX"]
-        ),
-        "bottom": float(
-            metadata["BRY"]
-        ),
-        "right": float(
-            metadata["BRX"]
-        ),
-        "top": float(
-            metadata["ULY"]
-        ),
+        "left": float(metadata["ULX"]),
+        "bottom": float(metadata["BRY"]),
+        "right": float(metadata["BRX"]),
+        "top": float(metadata["ULY"]),
     },
 }
 
 
-def _numeric_statistics(
+def numeric_statistics(
 values: np.ndarray,
 ) -> dict[str, Any]:
-"""Calculate statistics for numeric raster values."""
+"""Calculate basic statistics."""
 
 values = values[
     np.isfinite(values)
@@ -216,24 +199,12 @@ if values.size == 0:
     }
 
 return {
-    "valid_pixels": int(
-        values.size
-    ),
-    "min": float(
-        np.min(values)
-    ),
-    "max": float(
-        np.max(values)
-    ),
-    "mean": float(
-        np.mean(values)
-    ),
-    "median": float(
-        np.median(values)
-    ),
-    "sum": float(
-        np.sum(values)
-    ),
+    "valid_pixels": int(values.size),
+    "min": float(np.min(values)),
+    "max": float(np.max(values)),
+    "mean": float(np.mean(values)),
+    "median": float(np.median(values)),
+    "sum": float(np.sum(values)),
 }
 
 
@@ -244,12 +215,11 @@ boundary_file: Path,
 """
 Calculate zonal statistics for Taoyuan districts.
 
-Important:
-This function only treats a single-band numeric raster
-as directly interpretable rainfall data.
+Only a single-band numeric raster is accepted.
 
-RGB/RGBA/colorized rasters are rejected rather than
-incorrectly treating colors as rainfall millimetres.
+RGB/RGBA/colorized rainfall maps are intentionally
+rejected because their pixel colors cannot safely
+be interpreted as millimetres without a WRA legend.
 """
 
 gdf = gpd.read_file(
@@ -261,6 +231,11 @@ if gdf.empty:
         "Taoyuan boundary is empty."
     )
 
+if gdf.crs is None:
+    raise RuntimeError(
+        "Taoyuan boundary has no CRS."
+    )
+
 with rasterio.open(
     raster_file
 ) as src:
@@ -269,20 +244,13 @@ with rasterio.open(
         raise RuntimeError(
             "Rainfall PNG contains "
             f"{src.count} bands. "
-            "It is not safe to interpret "
-            "this directly as rainfall values. "
-            "A WRA color/value lookup is required."
+            "Direct rainfall statistics are disabled "
+            "until the WRA color/value mapping is known."
         )
 
     if src.crs is None:
         raise RuntimeError(
-            "Georeferenced rainfall raster "
-            "has no CRS."
-        )
-
-    if gdf.crs is None:
-        raise RuntimeError(
-            "Taoyuan boundary has no CRS."
+            "Rainfall raster has no CRS."
         )
 
     if gdf.crs != src.crs:
@@ -305,11 +273,9 @@ with rasterio.open(
             filled=False,
         )
 
-        values = clipped[0]
+        values = clipped[0].compressed()
 
-        values = values.compressed()
-
-        statistics = _numeric_statistics(
+        statistics = numeric_statistics(
             values
         )
 
@@ -338,8 +304,11 @@ with rasterio.open(
                     "",
                 )
             ),
-            **statistics,
         }
+
+        result.update(
+            statistics
+        )
 
         results.append(
             result
@@ -377,12 +346,15 @@ output_tif: Path,
 output_json: Path,
 ) -> dict[str, Any]:
 """
-Full rainfall processing pipeline.
+Process the WRA rainfall raster.
+
+Steps:
 
 1. Inspect PNG.
-2. Georeference it.
-3. Calculate district statistics.
-4. Save JSON.
+2. Apply WRA geospatial metadata.
+3. Write GeoTIFF.
+4. Attempt district statistics.
+5. Save processing result as JSON.
 """
 
 inspection = inspect_png(
