@@ -1,43 +1,11 @@
+
+from __future__ import annotations
+
 from pathlib import Path
 
 
 # =========================================================
-# WRA API
-# =========================================================
-
-WRA_BASE_URL = (
-    "https://iot.wra.gov.tw"
-)
-
-
-PRECIPITATION_URL = (
-    f"{WRA_BASE_URL}"
-    "/rasterMap/precipitation"
-)
-
-
-INUNDATION_URL = (
-    f"{WRA_BASE_URL}"
-    "/rasterMap/inundation"
-)
-
-
-PRECIPITATION_METADATA_URL = (
-    f"{WRA_BASE_URL}"
-    "/rasterMap/precipitation/"
-    "rasterMapMetaData"
-)
-
-
-INUNDATION_METADATA_URL = (
-    f"{WRA_BASE_URL}"
-    "/rasterMap/inundation/"
-    "rasetMapMetaData"
-)
-
-
-# =========================================================
-# Project paths
+# Project
 # =========================================================
 
 PROJECT_ROOT = (
@@ -68,12 +36,56 @@ BOUNDARY_FILE = (
 
 
 # =========================================================
-# CRS
+# Coordinate Reference Systems
 # =========================================================
 
 WGS84 = "EPSG:4326"
 
 TAIWAN_TM2_121 = "EPSG:3826"
+
+
+# =========================================================
+# WRA API
+# =========================================================
+
+WRA_BASE_URL = (
+    "https://iot.wra.gov.tw"
+)
+
+
+# ---------------------------------------------------------
+# Rainfall
+# ---------------------------------------------------------
+#
+# cumulativeHours:
+#
+# 1 ~ 24 hours
+#
+# 1 = latest 1-hour cumulative rainfall
+# 3 = latest 3-hour cumulative rainfall
+# 6 = latest 6-hour cumulative rainfall
+# 12 = latest 12-hour cumulative rainfall
+# 24 = latest 24-hour cumulative rainfall
+#
+# ---------------------------------------------------------
+
+RAINFALL_CUMULATIVE_HOURS = 1
+
+
+PRECIPITATION_URL = (
+    f"{WRA_BASE_URL}"
+    "/rasterMap/precipitation"
+)
+
+
+# ---------------------------------------------------------
+# Inundation
+# ---------------------------------------------------------
+
+INUNDATION_URL = (
+    f"{WRA_BASE_URL}"
+    "/rasterMap/inundation"
+)
 
 
 # =========================================================
