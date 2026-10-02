@@ -33,39 +33,75 @@ class WRAClient:
         params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
 
+        print()
         print("=" * 70)
-        print("[WRA] Request")
+        print("[WRA] HTTP REQUEST")
         print("=" * 70)
 
         print(
-            "[WRA] GET",
+            "[WRA] URL:",
             url,
         )
 
-        if params:
+        print(
+            "[WRA] PARAMS:",
+            json.dumps(
+                params,
+                ensure_ascii=False,
+                indent=2,
+            ),
+        )
 
-            print(
-                "[WRA] params:",
-                json.dumps(
-                    params,
-                    ensure_ascii=False,
-                ),
-            )
 
+        # ==================================================
+        # Build PreparedRequest first
+        # ==================================================
+
+        request = requests.Request(
+            method="GET",
+            url=url,
+            params=params,
+            headers={
+                "User-Agent": USER_AGENT,
+                "Accept": "*/*",
+            },
+        )
+
+        prepared = self.session.prepare_request(
+            request
+        )
+
+
+        print(
+            "[WRA] PREPARED URL:",
+            prepared.url,
+        )
+
+
+        print(
+            "[WRA] PREPARED HEADERS:",
+            json.dumps(
+                dict(prepared.headers),
+                ensure_ascii=False,
+                indent=2,
+            ),
+        )
+
+
+        # ==================================================
+        # Send request
+        # ==================================================
 
         try:
 
-            response = self.session.get(
-
-                url,
-
-                params=params,
-
+            response = self.session.send(
+                prepared,
                 timeout=self.timeout,
             )
 
         except requests.RequestException as exc:
 
+            print()
             print(
                 "[WRA] REQUEST EXCEPTION:"
             )
@@ -79,32 +115,41 @@ class WRAClient:
             ) from exc
 
 
+        # ==================================================
+        # Response information
+        # ==================================================
+
+        print()
+        print("=" * 70)
+        print("[WRA] HTTP RESPONSE")
+        print("=" * 70)
+
         print(
-            "[WRA] final URL:",
+            "[WRA] RESPONSE URL:",
             response.url,
         )
 
         print(
-            "[WRA] status:",
+            "[WRA] STATUS:",
             response.status_code,
         )
 
         print(
-            "[WRA] content-type:",
+            "[WRA] CONTENT-TYPE:",
             response.headers.get(
                 "Content-Type"
             ),
         )
 
         print(
-            "[WRA] content-length:",
+            "[WRA] CONTENT-LENGTH:",
             response.headers.get(
                 "Content-Length"
             ),
         )
 
         print(
-            "[WRA] response-size:",
+            "[WRA] RESPONSE SIZE:",
             len(response.content),
             "bytes",
         )
@@ -121,12 +166,14 @@ class WRAClient:
 
 
         # ==================================================
-        # Save response headers
+        # Save headers
         # ==================================================
 
-        headers_file = output_file.with_suffix(
-            output_file.suffix
-            + ".headers.json"
+        headers_file = (
+            output_file.with_suffix(
+                output_file.suffix
+                + ".headers.json"
+            )
         )
 
         headers = {
@@ -146,44 +193,20 @@ class WRAClient:
 
 
         # ==================================================
-        # HTTP error
+        # Error response
         # ==================================================
 
         if not response.ok:
 
             print()
+            print("=" * 70)
+            print("[WRA] ERROR RESPONSE")
+            print("=" * 70)
+
             print(
-                "[WRA] ERROR RESPONSE:"
+                response.text[:10000]
             )
 
-            print("-" * 70)
-
-
-            try:
-
-                error_json = response.json()
-
-                print(
-                    json.dumps(
-                        error_json,
-                        ensure_ascii=False,
-                        indent=2,
-                    )
-                )
-
-            except ValueError:
-
-                print(
-                    response.text[:10000]
-                )
-
-
-            print("-" * 70)
-
-
-            # ----------------------------------------------
-            # Save raw error
-            # ----------------------------------------------
 
             error_file = (
                 output_file.with_suffix(
@@ -197,10 +220,6 @@ class WRAClient:
                 encoding="utf-8",
             )
 
-
-            # ----------------------------------------------
-            # Save JSON error
-            # ----------------------------------------------
 
             try:
 
@@ -255,14 +274,12 @@ class WRAClient:
             )
         )
 
-
         metadata_file = (
             output_file.with_suffix(
                 output_file.suffix
                 + ".metadata.json"
             )
         )
-
 
         metadata = None
 
@@ -290,11 +307,6 @@ class WRAClient:
 
             except json.JSONDecodeError:
 
-                print(
-                    "[WRA] RasterMepMetaData "
-                    "is not JSON."
-                )
-
                 metadata_file.write_text(
                     metadata_raw,
                     encoding="utf-8",
@@ -309,10 +321,6 @@ class WRAClient:
                 "header not found."
             )
 
-
-        # ==================================================
-        # Return
-        # ==================================================
 
         return {
 
@@ -339,3 +347,4 @@ class WRAClient:
             "headers_file":
                 str(headers_file),
         }
+    
