@@ -1,0 +1,23 @@
+{
+  "updated_at": "2026-10-02T10:16:10.877264+00:00",
+  "city": "桃園市",
+  "mode": "diagnostic",
+  "rainfall": {
+    "success": false,
+    "url": "https://iot.wra.gov.tw/rasterMap/precipitation",
+    "error": "WRA API request failed: HTTP 400\nURL: https://iot.wra.gov.tw/rasterMap/precipitation\nResponse: {\"message\":\"The cumulativeHours must between 1 and 24.\"}"
+  },
+  "inundation": {
+    "success": true,
+    "url": "https://iot.wra.gov.tw/rasterMap/inundation",
+    "result": {
+      "url": "https://iot.wra.gov.tw/rasterMap/inundation",
+      "status_code": 200,
+      "content_type": "application/json; charset=utf-8",
+      "content_length": 72,
+      "metadata": null,
+      "body_file": "/home/runner/work/taoyuan-water-monitor/taoyuan-water-monitor/data/latest/raw/inundation.bin",
+      "headers_file": "/home/runner/work/taoyuan-water-monitor/taoyuan-water-monitor/data/latest/raw/inundation.bin.headers.json"
+    }
+  }
+}

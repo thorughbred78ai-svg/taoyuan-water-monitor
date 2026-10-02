@@ -1,0 +1,1 @@
+{"message":"The cumulativeHours must between 1 and 24."}
