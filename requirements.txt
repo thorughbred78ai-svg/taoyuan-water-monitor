@@ -1,6 +1,7 @@
-requests==2.32.5
-rasterio==1.4.3
-geopandas==1.1.1
-shapely==2.1.1
-pyproj==3.7.2
-numpy==2.3.3
+requests>=2.32,<3
+numpy>=2.0,<3
+rasterio>=1.4,<2
+geopandas>=1.0,<2
+shapely>=2.0,<3
+pyproj>=3.6,<4
+
