@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import json
@@ -26,7 +25,6 @@ class WRAClient:
             "Accept": "*/*",
         })
 
-
     def get(
         self,
         url: str,
@@ -50,6 +48,42 @@ class WRAClient:
             response.headers.get("Content-Type"),
         )
 
+        # --------------------------------------------------
+        # IMPORTANT:
+        # Print API error body before raise_for_status()
+        # --------------------------------------------------
+
+        if not response.ok:
+
+            print(
+                "[WRA] ERROR RESPONSE:"
+            )
+
+            print(
+                response.text[:10000]
+            )
+
+            error_file = output_file.with_suffix(
+                output_file.suffix + ".error.txt"
+            )
+
+            error_file.parent.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+
+            error_file.write_text(
+                response.text,
+                encoding="utf-8",
+            )
+
+            raise RuntimeError(
+                "WRA API request failed: "
+                f"HTTP {response.status_code}\n"
+                f"URL: {url}\n"
+                f"Response: {response.text[:2000]}"
+            )
+
         response.raise_for_status()
 
         output_file.parent.mkdir(
@@ -61,9 +95,9 @@ class WRAClient:
             response.content
         )
 
-        # ----------------------------------------------
-        # Save all HTTP headers
-        # ----------------------------------------------
+        # --------------------------------------------------
+        # Save HTTP headers
+        # --------------------------------------------------
 
         headers = {
             key: value
@@ -83,9 +117,9 @@ class WRAClient:
             encoding="utf-8",
         )
 
-        # ----------------------------------------------
-        # RasterMepMetaData
-        # ----------------------------------------------
+        # --------------------------------------------------
+        # Raster metadata
+        # --------------------------------------------------
 
         metadata_raw = response.headers.get(
             "RasterMepMetaData"
@@ -133,12 +167,14 @@ class WRAClient:
         return {
             "url": url,
             "status_code": response.status_code,
-            "content_type": response.headers.get(
-                "Content-Type"
-            ),
-            "content_length": len(
-                response.content
-            ),
+            "content_type":
+                response.headers.get(
+                    "Content-Type"
+                ),
+            "content_length":
+                len(response.content),
             "metadata": metadata,
-            "body_file": str(output_file),
+            "body_file":
+                str(output_file),
         }
+
