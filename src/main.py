@@ -403,6 +403,51 @@ def main() -> None:
         params=rainfall_params,
     )
 
+    # =====================================================
+    # 2.5 Process rainfall raster
+    # =====================================================
+
+    rainfall_file = (
+        RAW_DIR
+        / "rainfall.bin"
+    )
+
+    rainfall_metadata_file = (
+        RAW_DIR
+        / "rainfall.bin.metadata.json"
+    )
+
+    rainfall_tif = (
+        RAW_DIR
+        / "rainfall.tif"
+    )
+
+    rainfall_statistics_file = (
+        LATEST_DIR
+        / "rainfall_statistics.json"
+    )
+
+    print()
+    print("=" * 70)
+    print("[2.5/4] Process rainfall raster")
+    print("=" * 70)
+
+    rainfall_processing = process_rainfall(
+        raster_file=rainfall_file,
+        metadata_file=rainfall_metadata_file,
+        boundary_file=BOUNDARY_FILE,
+        output_tif=rainfall_tif,
+        output_json=rainfall_statistics_file,
+    )
+
+    print(
+        json.dumps(
+            rainfall_processing,
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
 
     # =====================================================
     # 4. Inundation API
