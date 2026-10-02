@@ -1,4 +1,3 @@
-
 name: Update Taoyuan Water Data
 
 on:
@@ -56,7 +55,7 @@ jobs:
 
 
       # ==================================================
-      # 3. Check environment
+      # 3. Check Python environment
       # ==================================================
 
       - name: Check Python environment
@@ -79,12 +78,12 @@ jobs:
           python -m pip install \
             --upgrade pip
 
-          pip install \
+          python -m pip install \
             -r requirements.txt
 
 
       # ==================================================
-      # 5. Check GIS Python packages
+      # 5. Check GIS environment
       # ==================================================
 
       - name: Check GIS environment
@@ -153,10 +152,8 @@ jobs:
 
           import geopandas as gpd
 
-          path = (
-              "data/boundary/"
-              "taoyuan_districts.geojson"
-          )
+          path = \
+            "data/boundary/taoyuan_districts.geojson"
 
           print(
               "Loading:",
@@ -195,14 +192,33 @@ jobs:
                   f" got {len(gdf)}"
               )
 
+          print()
+          print(
+              "Taoyuan boundary validation OK."
+          )
+
           PY
 
 
       # ==================================================
       # 8. Run WRA API diagnostic
       # ==================================================
+      #
+      # IMPORTANT:
+      #
+      # Do not stop the workflow here.
+      #
+      # main.py is intentionally allowed to return
+      # a non-zero exit code so that both APIs can be
+      # tested and their error responses collected.
+      #
+      # ==================================================
 
       - name: Run WRA API diagnostic
+
+        id: wra_diagnostic
+
+        continue-on-error: true
 
         env:
 
@@ -245,7 +261,7 @@ jobs:
 
 
       # ==================================================
-      # 10. Show WRA errors
+      # 10. Show WRA error responses
       # ==================================================
 
       - name: Show WRA error responses
@@ -277,11 +293,47 @@ jobs:
                 echo
               ' _ {} \;
 
+          else
+
+            echo "No data/latest directory."
+
           fi
 
 
       # ==================================================
-      # 11. Commit diagnostic data
+      # 11. Show WRA headers
+      # ==================================================
+
+      - name: Show WRA response headers
+
+        if: always()
+
+        run: |
+
+          echo "======================================"
+
+          echo "WRA response headers"
+
+          echo "======================================"
+
+          if [ -d "data/latest" ]; then
+
+            find data/latest \
+              -type f \
+              -name "*.headers.json" \
+              -print \
+              -exec sh -c '
+                echo
+                echo "----- $1 -----"
+                cat "$1"
+                echo
+              ' _ {} \;
+
+          fi
+
+
+      # ==================================================
+      # 12. Commit diagnostic data
       # ==================================================
 
       - name: Commit diagnostic data
@@ -316,3 +368,32 @@ jobs:
               || true
 
           fi
+
+
+      # ==================================================
+      # 13. Final status
+      # ==================================================
+
+      - name: Final diagnostic status
+
+        if: always()
+
+        run: |
+
+          echo "======================================"
+
+          echo "WRA diagnostic finished"
+
+          echo "======================================"
+
+          echo "Check the previous steps for:"
+
+          echo "1. precipitation API response"
+
+          echo "2. inundation API response"
+
+          echo "3. HTTP response headers"
+
+          echo "4. API error body"
+
+          echo "5. generated diagnostic files"
