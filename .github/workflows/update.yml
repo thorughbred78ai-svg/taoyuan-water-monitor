@@ -1,3 +1,4 @@
+
 name: Update Taoyuan Water Data
 
 on:
@@ -5,7 +6,6 @@ on:
   workflow_dispatch:
 
   schedule:
-    # 每 30 分鐘執行一次
     - cron: "*/30 * * * *"
 
 
@@ -42,7 +42,7 @@ jobs:
 
 
       # ==================================================
-      # 2. Python
+      # 2. Setup Python
       # ==================================================
 
       - name: Setup Python
@@ -56,30 +56,20 @@ jobs:
 
 
       # ==================================================
-      # 3. Install GIS libraries
+      # 3. Check environment
       # ==================================================
 
-      - name: Install system GIS packages
+      - name: Check Python environment
 
         run: |
 
-          sudo apt-get update
+          python --version
 
-          sudo apt-get install -y \
-            gdal-bin \
-            libgdal-dev \
-            proj-bin \
-            libproj-dev
-
-          echo "GDAL:"
-          gdalinfo --version
-
-          echo "OGR:"
-          ogrinfo --version
+          python -m pip --version
 
 
       # ==================================================
-      # 4. Install Python packages
+      # 4. Install Python dependencies
       # ==================================================
 
       - name: Install Python dependencies
@@ -94,7 +84,51 @@ jobs:
 
 
       # ==================================================
-      # 5. Validate Python
+      # 5. Check GIS Python packages
+      # ==================================================
+
+      - name: Check GIS environment
+
+        run: |
+
+          python - <<'PY'
+
+          import geopandas
+          import rasterio
+          import shapely
+          import pyproj
+          import requests
+
+          print(
+              "GeoPandas:",
+              geopandas.__version__
+          )
+
+          print(
+              "Rasterio:",
+              rasterio.__version__
+          )
+
+          print(
+              "Shapely:",
+              shapely.__version__
+          )
+
+          print(
+              "PyProj:",
+              pyproj.__version__
+          )
+
+          print(
+              "Requests:",
+              requests.__version__
+          )
+
+          PY
+
+
+      # ==================================================
+      # 6. Validate Python source
       # ==================================================
 
       - name: Validate Python source
@@ -104,13 +138,11 @@ jobs:
           python -m py_compile \
             src/config.py \
             src/wra_client.py \
-            src/raster.py \
-            src/spatial.py \
             src/main.py
 
 
       # ==================================================
-      # 6. Validate boundary
+      # 7. Validate Taoyuan boundary
       # ==================================================
 
       - name: Validate Taoyuan boundary
@@ -132,10 +164,6 @@ jobs:
           )
 
           gdf = gpd.read_file(path)
-
-          print()
-          print(gdf)
-          print()
 
           print(
               "CRS:",
@@ -171,7 +199,7 @@ jobs:
 
 
       # ==================================================
-      # 7. Run API diagnostic
+      # 8. Run WRA API diagnostic
       # ==================================================
 
       - name: Run WRA API diagnostic
@@ -186,7 +214,7 @@ jobs:
 
 
       # ==================================================
-      # 8. List generated diagnostic files
+      # 9. Show generated files
       # ==================================================
 
       - name: Show generated files
@@ -201,15 +229,23 @@ jobs:
 
           echo "======================================"
 
-          find data/latest \
-            -maxdepth 3 \
-            -type f \
-            -print \
-            | sort
+          if [ -d "data/latest" ]; then
+
+            find data/latest \
+              -maxdepth 4 \
+              -type f \
+              -print \
+              | sort
+
+          else
+
+            echo "data/latest does not exist"
+
+          fi
 
 
       # ==================================================
-      # 9. Show WRA error files
+      # 10. Show WRA errors
       # ==================================================
 
       - name: Show WRA error responses
@@ -224,24 +260,28 @@ jobs:
 
           echo "======================================"
 
-          find data/latest \
-            -type f \
-            \( \
-              -name "*.error.txt" \
-              -o \
-              -name "*.error.json" \
-            \) \
-            -print \
-            -exec sh -c '
-              echo
-              echo "----- $1 -----"
-              cat "$1"
-              echo
-            ' _ {} \;
+          if [ -d "data/latest" ]; then
+
+            find data/latest \
+              -type f \
+              \( \
+                -name "*.error.txt" \
+                -o \
+                -name "*.error.json" \
+              \) \
+              -print \
+              -exec sh -c '
+                echo
+                echo "----- $1 -----"
+                cat "$1"
+                echo
+              ' _ {} \;
+
+          fi
 
 
       # ==================================================
-      # 10. Commit generated diagnostic data
+      # 11. Commit diagnostic data
       # ==================================================
 
       - name: Commit diagnostic data
