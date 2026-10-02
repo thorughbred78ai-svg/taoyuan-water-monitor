@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from rainfall_processor import process_rainfall
+
 import json
 from datetime import datetime, timezone
 from pathlib import Path
