@@ -506,6 +506,9 @@ def main() -> None:
                 rainfall_result,
         },
 
+        "rainfall_processing":
+        rainfall_processing,
+        
         "inundation": {
 
             "endpoint":
