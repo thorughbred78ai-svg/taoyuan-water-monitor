@@ -414,7 +414,7 @@ class WRAClient:
 
         if metadata_raw:
             print(
-                "[WRA] RasterMepMetaData found."
+                "[WRA] RasterMapMetaData found."
             )
 
             try:
@@ -434,7 +434,7 @@ class WRAClient:
 
             except json.JSONDecodeError:
                 print(
-                    "[WRA] RasterMepMetaData "
+                    "[WRA] RasterMapMetaData "
                     "is not valid JSON."
                 )
 
