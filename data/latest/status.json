@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-02T13:10:00.884658+00:00",
+  "updated_at": "2026-10-02T13:42:14.240455+00:00",
   "city": "桃園市",
   "mode": "diagnostic",
   "boundary": {
@@ -33,7 +33,7 @@
       },
       "status_code": 200,
       "content_type": "application/octet-stream",
-      "content_length": 8624,
+      "content_length": 5759,
       "metadata": null,
       "body_file": "/home/runner/work/taoyuan-water-monitor/taoyuan-water-monitor/data/latest/raw/rainfall.bin",
       "headers_file": "/home/runner/work/taoyuan-water-monitor/taoyuan-water-monitor/data/latest/raw/rainfall.bin.headers.json"
