@@ -1,0 +1,92 @@
+html,
+body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family:
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Noto Sans TC",
+        sans-serif;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+}
+
+header {
+    background: #0b3d5c;
+    color: white;
+    padding: 12px 20px;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 20px;
+}
+
+#updated {
+    margin-top: 4px;
+    font-size: 13px;
+    opacity: 0.8;
+}
+
+main {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+}
+
+#map {
+    flex: 1;
+    min-height: 500px;
+}
+
+aside {
+    width: 320px;
+    overflow-y: auto;
+    background: white;
+    border-left: 1px solid #ddd;
+    padding: 15px;
+}
+
+aside h2 {
+    margin-top: 0;
+}
+
+.district {
+    padding: 10px;
+    margin-bottom: 8px;
+    border-radius: 6px;
+    background: #f5f5f5;
+}
+
+.district-name {
+    font-weight: bold;
+}
+
+.district-value {
+    margin-top: 5px;
+    font-size: 13px;
+}
+
+@media (max-width: 800px) {
+
+    main {
+        flex-direction: column;
+    }
+
+    #map {
+        height: 60vh;
+        flex: none;
+    }
+
+    aside {
+        width: auto;
+        height: 40vh;
+        border-left: none;
+        border-top: 1px solid #ddd;
+    }
+}
