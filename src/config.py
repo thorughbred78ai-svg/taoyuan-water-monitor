@@ -19,8 +19,9 @@ INUNDATION_URL = f"{WRA_BASE_URL}/rasterMap/inundation"
 
 RAINFALL_CUMULATIVE_HOURS = int(os.getenv("RAINFALL_CUMULATIVE_HOURS", "1"))
 
-# HTTP 400 拒絕設定值時，依序嘗試的備援小時數
-RAINFALL_HOURS_FALLBACK = (3, 6, 12, 24)
+# 雨量 API：cumulativeHours 為 1~24 的整數（Swagger）；一次下載 1~24 全部延時
+RAINFALL_HOURS: tuple[int, ...] = tuple(range(1, 25))
+RAINFALL_WORKERS = 4  # 併發下載數（對公共 API 保持禮貌）
 
 # 淹水 API（WRA Swagger）：region 為 taiwan/taoyuan/...；
 # forecastHours：0=目前即時淹水範圍，1~6=未來預測 1~6 小時。程式會逐一抓取 0~6。
