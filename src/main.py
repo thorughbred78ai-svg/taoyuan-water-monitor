@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -125,6 +126,20 @@ def fetch_road_data(districts) -> dict[str, Any]:
                 "sensors": []}
 
 
+def run_fast(districts) -> int:
+    """Refresh only fast-changing sources: CWA rain gauges + road flood sensors."""
+    log.info("FAST update: stations + road sensors only")
+    st = fetch_stations_data()
+    st["updated_at"] = now_iso()
+    save_json(LATEST_DIR / "stations.json", st)
+    road = fetch_road_data(districts)
+    road["updated_at"] = now_iso()
+    save_json(LATEST_DIR / "road_sensors.json", road)
+    (LATEST_DIR / ".mode").write_text("fast", encoding="utf-8")
+    log.info("Done (fast). stations=%s road=%s", st.get("station_count"), road.get("count"))
+    return 0
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     LATEST_DIR.mkdir(parents=True, exist_ok=True)
@@ -140,6 +155,15 @@ def main() -> int:
         status["error"] = f"boundary: {exc}"
         save_json(status_file, status)
         return 1
+
+    # ETL_MODE=fast：只更新氣象署測站＋路面淹水感測器（沿用上次完整更新的 WRA 結果）。
+    # 找不到上次結果時自動改為完整更新。
+    mode = os.getenv("ETL_MODE", "full").lower()
+    if mode == "fast" and not (LATEST_DIR / "district_status.json").exists():
+        log.warning("fast mode requested but no previous full data found -> running full.")
+        mode = "full"
+    if mode == "fast":
+        return run_fast(districts)
 
     client = WRAClient()
 
@@ -251,7 +275,8 @@ def main() -> int:
 
     status["ok"] = True
     save_json(status_file, status)
-    log.info("Done.")
+    (LATEST_DIR / ".mode").write_text("full", encoding="utf-8")
+    log.info("Done (full).")
     return 0
 
 
