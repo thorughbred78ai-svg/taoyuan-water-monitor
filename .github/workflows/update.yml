@@ -2,6 +2,10 @@ name: Update & Deploy Taoyuan Water Monitor
 
 on:
   workflow_dispatch:
+    inputs:
+      rainfall_hours:
+        description: "累積雨量小時數 (1~24)；取色階時可填 24 以提高出現降雨像素的機率"
+        default: "1"
   schedule:
     - cron: "*/30 * * * *"
   push:
@@ -39,7 +43,14 @@ jobs:
       - name: Validate source
         run: python -m py_compile src/*.py
 
+      - name: Clean stale outputs
+        run: rm -rf data/latest
+
       - name: Fetch WRA data and compute district statistics
+        env:
+          # 於 Settings → Variables 設定（非機密）；未設定則為空
+          INUNDATION_PARAMS: ${{ vars.INUNDATION_PARAMS }}
+          RAINFALL_CUMULATIVE_HOURS: ${{ inputs.rainfall_hours || '1' }}
         run: python src/main.py
 
       - name: Show results (debug)
@@ -49,6 +60,15 @@ jobs:
             echo "----- $f -----"; cat "$f" 2>/dev/null || echo "(not found)"
           done
           find data/latest/raw -name '*.error.txt' -exec sh -c 'echo "--- $1 ---"; head -c 3000 "$1"' _ {} \; 2>/dev/null || true
+
+      - name: Upload diagnostics artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: latest-data
+          path: data/latest/
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Build site
         run: |
