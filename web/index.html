@@ -1,41 +1,123 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>桃園市即時水情監測</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="桃園市即時水情監測：雨量網格、氣象署雨量測站、淹水範圍與雨量警示。">
+<title>桃園市即時水情監測</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header>
-  <div class="hdr-row">
-    <h1>桃園市即時水情監測</h1>
-    <div class="hdr-controls">
-      <div id="updated">載入中...</div>
-      <label>累積雨量延時
-        <select id="rain-hours" disabled><option>1 小時</option></select>
-      </label>
-      <label>淹水範圍
-        <select id="hour" disabled><option>目前即時</option></select>
-      </label>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark">雨</div>
+    <div class="brand-text">
+      <h1>桃園市即時水情監測</h1>
+      <div class="brand-sub">TAOYUAN WATER MONITOR</div>
     </div>
-    <div id="clock" title="臺灣目前時間"></div>
   </div>
-  <div id="notice" hidden></div>
+
+  <div class="topbar-controls">
+    <span id="windowText">載入中...</span>
+    <label>累積雨量延時
+      <select id="rainHours" disabled><option>1 小時</option></select>
+    </label>
+    <label>淹水範圍
+      <select id="floodHour" disabled><option>目前即時</option></select>
+    </label>
+  </div>
+
+  <div class="topbar-right">
+    <div class="live"><span class="live-dot" id="liveDot"></span><span id="liveText">LIVE</span></div>
+    <div class="clock" id="clock" title="臺灣目前時間">--:--:--</div>
+    <button class="theme-toggle" id="themeToggle" title="切換亮暗色" aria-label="切換亮暗色">◐</button>
+  </div>
 </header>
-<main>
-  <div id="map"></div>
-  <aside>
-    <h2>行政區</h2>
-    <div id="district-list">載入中...</div>
+
+<div id="alerts" role="status" aria-live="polite"></div>
+
+<main class="dashboard">
+
+  <aside class="left">
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">即時統計</h2>
+        <span class="panel-hint">氣象署測站 · mm</span>
+      </div>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-label">1H 最大雨量</div>
+          <div class="kpi-value"><span id="max1h">--</span><span class="kpi-unit">mm</span></div></div>
+        <div class="kpi"><div class="kpi-label">24H 最大雨量</div>
+          <div class="kpi-value"><span id="max24h">--</span><span class="kpi-unit">mm</span></div></div>
+        <div class="kpi"><div class="kpi-label">有雨測站（1H）</div>
+          <div class="kpi-value"><span id="wetCount">--</span><span class="kpi-unit">站</span></div></div>
+        <div class="kpi"><div class="kpi-label">監測測站</div>
+          <div class="kpi-value"><span id="stationCount">--</span><span class="kpi-unit">站</span></div></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">雨量排行</h2>
+        <span class="panel-hint">1H</span>
+      </div>
+      <div class="rank-list" id="rankList"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2 class="panel-title">測站搜尋</h2></div>
+      <div class="search">
+        <input id="stationSearch" type="search" placeholder="輸入測站名稱、行政區或代碼..." aria-label="搜尋測站">
+      </div>
+      <div class="station-list" id="stationList"></div>
+    </section>
   </aside>
+
+  <section class="center">
+    <section class="panel map-panel">
+      <div class="panel-head">
+        <h2 class="panel-title">桃園市雨量分布</h2>
+        <span class="panel-hint" id="mapHint">雨量網格 · 測站 · 淹水</span>
+      </div>
+      <div id="map" class="map"></div>
+    </section>
+  </section>
+
+  <aside class="right">
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">雨量警戒</h2>
+        <span class="panel-hint">STATUS</span>
+      </div>
+      <div class="warning-list" id="warningList"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2 class="panel-title">系統狀態</h2></div>
+      <div style="padding:12px" id="sysStatus"></div>
+    </section>
+  </aside>
+
+  <section class="panel district-panel">
+    <div class="panel-head">
+      <h2 class="panel-title">桃園市行政區雨量</h2>
+      <span class="panel-hint" id="districtHint">13 區</span>
+    </div>
+    <div class="district-grid" id="districtGrid"></div>
+  </section>
+
 </main>
-<footer>
-  資料來源：經濟部水利署開放資料，自動彙整，僅供參考，非官方警戒或預警資訊；
+
+<div class="source">
+  資料來源：經濟部水利署開放資料（雨量網格、淹水範圍）、
+  <a href="https://www.cwa.gov.tw/" target="_blank" rel="noopener">交通部中央氣象署</a>
+  開放資料（雨量觀測站）。自動彙整，僅供參考，非官方警戒或預警；
   防災決策請以中央氣象署、水利署及桃園市政府公告為準。
-</footer>
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="app.js"></script>
