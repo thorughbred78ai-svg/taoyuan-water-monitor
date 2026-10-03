@@ -1,3 +1,4 @@
+
 const map = L.map("map").setView([24.9937, 121.3010], 10);
 
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -27,6 +28,11 @@ function esc(value) {
 
 function fmt(value, unit) {
     return value === null || value === undefined ? "-" : `${value} ${unit}`;
+}
+
+function rainText(d) {
+    if (!d || d.rainfall_range === null || d.rainfall_range === undefined) return "-";
+    return `${d.rainfall_range} mm${d.rainfall_dry_inferred ? "（無雨推論）" : ""}`;
 }
 
 function taipeiTime(iso) {
@@ -74,7 +80,7 @@ async function main() {
                 const d = statusMap[name];
                 lyr.bindPopup(
                     `<strong>${esc(name)}</strong><br>` +
-                    `${hours} 小時累積雨量（最大）：${esc(fmt(d?.rainfall_mm, "mm"))}<br>` +
+                    `${hours} 小時累積雨量（區內最高級距）：${esc(rainText(d))}<br>` +
                     `淹水面積：${esc(fmt(d?.inundation_area_km2, "km²"))}`
                 );
             }
@@ -110,8 +116,7 @@ function renderDistrictList(districts, hours) {
             el.className = "district";
             el.innerHTML =
                 `<div class="district-name">${esc(d.name)}</div>` +
-                `<div class="district-value">${hours} 小時累積雨量（最大）：${esc(fmt(d.rainfall_mm, "mm"))}` +
-                `<br>平均：${esc(fmt(d.rainfall_mean_mm, "mm"))}` +
+                `<div class="district-value">${hours} 小時累積雨量（區內最高級距）：${esc(rainText(d))}` +
                 `<br>淹水面積：${esc(fmt(d.inundation_area_km2, "km²"))}</div>`;
             container.appendChild(el);
         });
