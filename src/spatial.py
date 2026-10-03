@@ -3,148 +3,43 @@ from __future__ import annotations
 from pathlib import Path
 
 import geopandas as gpd
-import rasterio
-from rasterio.mask import mask
-from shapely.geometry import box
+import numpy as np
+from rasterio import features
+from rasterio.transform import Affine
+
+from config import EXPECTED_DISTRICTS, TWD97_TM2
 
 
-def load_taoyuan_boundary(
-    path: Path,
-) -> gpd.GeoDataFrame:
-
+def load_districts(path: Path) -> gpd.GeoDataFrame:
+    """Load Taoyuan districts, validate, return GeoDataFrame in EPSG:3826 with `name`."""
     gdf = gpd.read_file(path)
-
     if gdf.empty:
-        raise RuntimeError(
-            "Taoyuan boundary is empty."
-        )
-
+        raise RuntimeError("Taoyuan boundary is empty.")
     if gdf.crs is None:
-        raise RuntimeError(
-            "Taoyuan boundary CRS is missing."
+        raise RuntimeError("Taoyuan boundary CRS is missing.")
+    if "TOWNNAME" not in gdf.columns:
+        raise RuntimeError(f"TOWNNAME column missing. columns={list(gdf.columns)}")
+
+    if "COUNTYNAME" in gdf.columns:
+        gdf = gdf[gdf["COUNTYNAME"].astype(str).str.contains("桃園")]
+    if len(gdf) != EXPECTED_DISTRICTS:
+        raise RuntimeError(f"Expected {EXPECTED_DISTRICTS} districts, got {len(gdf)}.")
+
+    gdf = gdf.copy()
+    gdf["name"] = gdf["TOWNNAME"].astype(str)
+    gdf["geometry"] = gdf.geometry.make_valid()
+    return gdf.to_crs(TWD97_TM2)[["name", "geometry"]]
+
+
+def district_masks(
+    districts: gpd.GeoDataFrame,
+    transform: Affine,
+    shape: tuple[int, int],
+) -> dict[str, np.ndarray]:
+    """Boolean mask (True = inside district) for each district on the raster grid."""
+    return {
+        str(name): features.geometry_mask(
+            [geom], out_shape=shape, transform=transform, invert=True
         )
-
-    return gdf
-
-
-def select_taoyuan(
-    gdf: gpd.GeoDataFrame,
-) -> gpd.GeoDataFrame:
-
-    # 兼容中文欄位
-    county_columns = [
-        "COUNTYNAME",
-        "county",
-        "COUNTY",
-        "縣市",
-        "縣市名稱",
-    ]
-
-    county_column = None
-
-    for column in county_columns:
-
-        if column in gdf.columns:
-            county_column = column
-            break
-
-    if county_column is None:
-
-        # 如果檔案本身就是桃園行政區
-        return gdf
-
-    result = gdf[
-        gdf[county_column].astype(str)
-        .str.contains("桃園")
-    ].copy()
-
-    if result.empty:
-
-        raise RuntimeError(
-            "No Taoyuan districts found."
-        )
-
-    return result
-
-
-def clip_raster_to_taoyuan(
-    raster_path: Path,
-    boundary: gpd.GeoDataFrame,
-    output_path: Path,
-) -> None:
-
-    with rasterio.open(
-        raster_path
-    ) as src:
-
-        boundary_proj = boundary.to_crs(
-            src.crs
-        )
-
-        geometries = [
-            geometry
-            for geometry in
-            boundary_proj.geometry
-            if geometry is not None
-            and not geometry.is_empty
-        ]
-
-        if not geometries:
-            raise RuntimeError(
-                "No valid boundary geometry."
-            )
-
-        clipped, transform = mask(
-            src,
-            geometries,
-            crop=True,
-            nodata=src.nodata,
-        )
-
-        profile = src.profile.copy()
-
-        profile.update({
-            "height": clipped.shape[1],
-            "width": clipped.shape[2],
-            "transform": transform,
-        })
-
-        output_path.parent.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
-
-        with rasterio.open(
-            output_path,
-            "w",
-            **profile,
-        ) as dst:
-
-            dst.write(clipped)
-
-
-def raster_intersects_taoyuan(
-    raster_path: Path,
-    boundary: gpd.GeoDataFrame,
-) -> bool:
-
-    with rasterio.open(
-        raster_path
-    ) as src:
-
-        bounds = src.bounds
-
-        raster_box = box(
-            bounds.left,
-            bounds.bottom,
-            bounds.right,
-            bounds.top,
-        )
-
-        boundary_proj = boundary.to_crs(
-            src.crs
-        )
-
-        return boundary_proj.geometry.intersects(
-            raster_box
-        ).any()
+        for name, geom in zip(districts["name"], districts.geometry)
+    }
