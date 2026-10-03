@@ -45,6 +45,21 @@ def read_rgba(data: bytes) -> np.ndarray:
     return np.moveaxis(bands[:4], 0, -1)
 
 
+def png_info(data: bytes) -> dict[str, Any]:
+    with MemoryFile(data) as mem, mem.open() as src:
+        try:
+            has_cmap = bool(src.colormap(1)) if src.count == 1 else False
+        except ValueError:
+            has_cmap = False
+        return {
+            "bands": src.count,
+            "dtype": list(src.dtypes),
+            "has_colormap": has_cmap,
+            "colorinterp": [str(c) for c in src.colorinterp],
+            "nodata": src.nodata,
+        }
+
+
 def build_transform(metadata: dict[str, Any], shape: tuple[int, int]) -> Affine:
     if not metadata or "ULX" not in metadata:
         raise RuntimeError("Raster metadata missing or incomplete.")
@@ -112,11 +127,22 @@ def process_rainfall(png: bytes, metadata: dict | None, districts) -> dict[str, 
             "colored_pixels": int((m & colored).sum()),
         }
     any_inside = np.logical_or.reduce(list(masks.values()))
+    everywhere = np.ones(rgba.shape[:2], dtype=bool)
     return {
         "legend_configured": bool(RAINFALL_LEGEND),
-        "raster": {"width": int(rgba.shape[1]), "height": int(rgba.shape[0])},
+        "raster": {
+            "width": int(rgba.shape[1]),
+            "height": int(rgba.shape[0]),
+            **png_info(png),
+            "colored_pixels_all_taiwan": int(colored.sum()),
+            "colored_pixels_taoyuan": int((any_inside & colored).sum()),
+            "alpha_values": [int(v) for v in np.unique(rgba[..., 3])[:10]],
+        },
         "districts": stats,
+        # 桃園範圍內的顏色（無降雨時為空）
         "color_histogram": color_histogram(rgba, any_inside),
+        # 全臺有顏色的像素（有降雨時才有內容；用來取得色階）
+        "color_histogram_all_taiwan": color_histogram(rgba, everywhere),
     }
 
 
