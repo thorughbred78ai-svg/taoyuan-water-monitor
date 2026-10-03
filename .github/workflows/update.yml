@@ -1,159 +1,76 @@
-name: Update Taoyuan Water Data
+name: Update & Deploy Taoyuan Water Monitor
 
 on:
   workflow_dispatch:
   schedule:
     - cron: "*/30 * * * *"
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "web/**"
+      - "data/boundary/**"
+      - "requirements.txt"
+      - ".github/workflows/update.yml"
 
-permissions:
-  contents: write
-
+# 單一工作流程：產生資料 -> 直接部署 Pages（不再 commit 資料回 main，
+# 避免 GITHUB_TOKEN 推送不會觸發其他 workflow、以及 repo 因每 30 分鐘 commit 而膨脹）
 concurrency:
-  group: taoyuan-water-update
-  cancel-in-progress: true
+  group: taoyuan-water
+  cancel-in-progress: false
 
 jobs:
   update:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
+      - uses: actions/checkout@v4
 
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: "pip"
+          cache: pip
 
-      - name: Check Python environment
-        run: |
-          python --version
-          python -m pip --version
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
 
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
+      - name: Validate source
+        run: python -m py_compile src/*.py
 
-      - name: Check GIS environment
-        run: |
-          python -c "import geopandas; import rasterio; import shapely; import pyproj; import requests; print('GeoPandas:', geopandas.__version__); print('Rasterio:', rasterio.__version__); print('Shapely:', shapely.__version__); print('PyProj:', pyproj.__version__); print('Requests:', requests.__version__)"
+      - name: Fetch WRA data and compute district statistics
+        run: python src/main.py
 
-      - name: Validate Python source
-        run: |
-          python -m py_compile src/config.py src/wra_client.py src/rainfall_processor.py src/main.py
-
-      - name: Validate Taoyuan boundary
-        run: |
-          python -c "import geopandas as gpd; p='data/boundary/taoyuan_districts.geojson'; g=gpd.read_file(p); print('CRS:',g.crs); print('Feature count:',len(g)); assert not g.empty,'Taoyuan boundary is empty'; assert g.crs is not None,'Boundary CRS is missing'; print('Taoyuan boundary validation OK.')"
-
-      - name: Run WRA API diagnostic
-        id: wra_diagnostic
-        continue-on-error: true
-        env:
-          PYTHONUNBUFFERED: "1"
-        run: |
-          python src/main.py
-
-      - name: Show generated files
+      - name: Show results (debug)
         if: always()
         run: |
-          echo "======================================"
-          echo "Generated files"
-          echo "======================================"
-          if [ -d "data/latest" ]; then
-            find data/latest -maxdepth 4 -type f -print | sort
-          else
-            echo "data/latest does not exist"
-          fi
+          for f in data/latest/status.json data/latest/district_status.json data/latest/rainfall_statistics.json data/latest/inundation_statistics.json; do
+            echo "----- $f -----"; cat "$f" 2>/dev/null || echo "(not found)"
+          done
+          find data/latest/raw -name '*.error.txt' -exec sh -c 'echo "--- $1 ---"; head -c 3000 "$1"' _ {} \; 2>/dev/null || true
 
-      - name: Show rainfall processing output
-        if: always()
+      - name: Build site
         run: |
-          echo "======================================"
-          echo "Rainfall processing output"
-          echo "======================================"
+          mkdir -p _site/data
+          cp -r web/. _site/
+          cp data/boundary/taoyuan_districts.geojson _site/data/
+          cp data/latest/district_status.json _site/data/
 
-          if [ -f "data/latest/rainfall_statistics.json" ]; then
-            echo "----- rainfall_statistics.json -----"
-            cat data/latest/rainfall_statistics.json
-          else
-            echo "rainfall_statistics.json not found."
-          fi
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
 
-          if [ -f "data/latest/raw/rainfall.bin.metadata.json" ]; then
-            echo "----- rainfall.bin.metadata.json -----"
-            cat data/latest/raw/rainfall.bin.metadata.json
-          else
-            echo "rainfall metadata not found."
-          fi
-
-      - name: Show WRA error responses
-        if: always()
-        run: |
-          echo "======================================"
-          echo "WRA error responses"
-          echo "======================================"
-
-          if [ -d "data/latest" ]; then
-            find data/latest -type f \( -name "*.error.txt" -o -name "*.error.json" \) -print -exec sh -c 'echo; echo "----- $1 -----"; cat "$1"; echo' _ {} \;
-          else
-            echo "No data/latest directory."
-          fi
-
-      - name: Show WRA response headers
-        if: always()
-        run: |
-          echo "======================================"
-          echo "WRA response headers"
-          echo "======================================"
-
-          if [ -d "data/latest" ]; then
-            find data/latest -type f -name "*.headers.json" -print -exec sh -c 'echo; echo "----- $1 -----"; cat "$1"; echo' _ {} \;
-          fi
-
-      - name: Show diagnostic status
-        if: always()
-        run: |
-          echo "======================================"
-          echo "Diagnostic status"
-          echo "======================================"
-
-          if [ -f "data/latest/status.json" ]; then
-            cat data/latest/status.json
-          else
-            echo "status.json not found."
-          fi
-
-      - name: Commit diagnostic data
-        if: always()
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add data/latest/
-
-          if git diff --cached --quiet; then
-            echo "No data changes."
-          else
-            git commit -m "chore: update WRA diagnostic data" || true
-            git push || true
-          fi
-
-      - name: Final diagnostic status
-        if: always()
-        run: |
-          echo "======================================"
-          echo "WRA diagnostic finished"
-          echo "======================================"
-          echo "Python compilation"
-          echo "Taoyuan boundary validation"
-          echo "Rainfall API"
-          echo "Rainfall processing"
-          echo "Inundation API"
-          echo "Diagnostic files"
-
+  deploy:
+    needs: update          # update 失敗 -> 不部署 -> 網站保留上一版有效資料
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
