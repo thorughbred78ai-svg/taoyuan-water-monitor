@@ -105,6 +105,19 @@
     <section class="panel">
       <div class="panel-head"><h2 class="panel-title">系統狀態</h2></div>
       <div class="sys" id="sysStatus"></div>
+      <div class="sys sys-controls">
+        <label class="sys-row" for="refreshSel"><span>更新週期</span>
+          <select id="refreshSel">
+            <option value="5">5 分鐘</option>
+            <option value="10">10 分鐘</option>
+            <option value="30" selected>30 分鐘</option>
+            <option value="60">60 分鐘</option>
+          </select>
+        </label>
+        <div class="sys-row"><span>下次檢查</span><strong id="nextCheck">-</strong></div>
+        <div class="note-small" id="refreshInfo" aria-live="polite"></div>
+        <div class="note-small">網頁依此週期重新讀取資料，資料有變動時自動重繪。來源實際更新頻率：雨量網格／淹水約 30 分鐘，氣象署測站與路面感測器約 5～10 分鐘（排程可能延遲）。</div>
+      </div>
     </section>
   </aside>
 
