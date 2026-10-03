@@ -47,7 +47,7 @@ button, select, input { font:inherit; }
 :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 
 /* ---------- sticky head: topbar + alerts ---------- */
-.sticky-head { position:sticky; top:0; z-index:1000; }
+.sticky-head { position:sticky; top:0; z-index:3000; }
 .topbar {
   display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between;
   gap:8px 18px; padding:8px 16px;
@@ -137,27 +137,43 @@ html[data-theme="dark"] .alert.orange .alert-badge { color:#1b1204; }
 
 /* map：維持原尺寸（高度固定，不隨左右欄伸縮） */
 .map-panel { display:flex; flex-direction:column; }
-.map { height:620px; flex:none; }
+.map { height:620px; flex:none; position:relative; z-index:0; isolation:isolate; }   /* 隔離 Leaflet 內部 z-index，避免圖例/控制項蓋到頁首 */
 .leaflet-container { background:#dde4ea; font-family:inherit; }
 html[data-theme="dark"] .leaflet-container { background:#1a222b; }
 .leaflet-tile-pane { filter:var(--tile-filter); }
 
-/* 雨量級距圖例：右側、半透明 */
-.leaflet-control.legend {
+/* 雨量級距圖例：預設在地圖右側、垂直置中；可拖曳（位置存於瀏覽器）*/
+.map-legend {
+  position:absolute; right:10px; top:50%; transform:translateY(-50%); z-index:900;
   background:var(--panel);
-  background:color-mix(in srgb, var(--panel) 82%, transparent);
+  background:color-mix(in srgb, var(--panel) 80%, transparent);
   -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
-  color:var(--text-1); border:1px solid var(--line); border-radius:6px; box-shadow:0 1px 4px rgba(0,0,0,.18);
+  color:var(--text-1); border:1px solid var(--line); border-radius:8px;
+  box-shadow:0 1px 6px rgba(0,0,0,.2); padding:6px 10px 8px; user-select:none;
 }
-.rain-legend { padding:8px 10px; }
-.rl-title { font-size:12px; font-weight:700; text-align:center; margin-bottom:6px; color:var(--text-2); line-height:1.3; }
+.map-legend.moved { right:auto; transform:none; }
+.map-legend.dragging { opacity:.9; box-shadow:0 4px 14px rgba(0,0,0,.3); }
+.rl-head { display:flex; align-items:center; gap:6px; cursor:grab; touch-action:none; padding:2px 0 6px; border-radius:4px; }
+.map-legend.dragging .rl-head { cursor:grabbing; }
+.rl-grip { color:var(--text-3); font-size:14px; line-height:1; }
+.rl-title { flex:1; font-size:12px; font-weight:700; text-align:center; color:var(--text-2); line-height:1.3; }
+.rl-toggle { width:22px; height:22px; padding:0; line-height:1; cursor:pointer; color:var(--text-2); background:var(--panel-2); border:1px solid var(--line); border-radius:4px; }
 .rl-body { display:flex; }
+.map-legend.collapsed .rl-body { display:none; }
+.map-legend.collapsed .rl-head { padding-bottom:0; }
 .rl-labels { position:relative; width:34px; height:calc(var(--bh) * 17); }
 .rl-labels span { position:absolute; right:6px; transform:translateY(-50%); font-size:11px; line-height:1; color:var(--text-2); }
 .rl-bar { display:flex; flex-direction:column; width:28px; opacity:.92; }
 .rl-bar div { height:var(--bh); }
 
 .leaflet-control-layers { background:color-mix(in srgb, var(--panel) 90%, transparent); color:var(--text-1); }
+
+/* 路面淹水感測器：菱形（與圓形雨量測站區分） */
+.rs-dot { width:14px; height:14px; margin:1px; background:#4d7fa0; border:2px solid #fff; transform:rotate(45deg); box-shadow:0 1px 4px rgba(0,0,0,.4); }
+.rs-dot.wet { background:#d98a00; }
+.rs-dot.na { background:#94a3b8; opacity:.85; }
+.rs-dot.alert { width:18px; height:18px; margin:0; background:var(--crit-solid); animation:pulse 1.6s infinite; }
+.rain-marker.road { transform:translate(16px,-50%); }
 
 /* map markers */
 .flood-marker, .rain-marker { padding:2px 8px; border-radius:14px; border:2px solid #fff; font-size:12.5px; font-weight:700; white-space:nowrap; color:#fff; }
@@ -250,9 +266,10 @@ html[data-theme="dark"] .badge.maybe { background:var(--watch); }
   .rl-labels span { font-size:9.5px; }
   .rl-labels { width:28px; }
   .rl-bar { width:20px; }
+  .map-legend { right:6px; padding:4px 6px 6px; }
   .kpi-value { font-size:20px; }
   .source { flex-direction:column; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .flood-marker, .rain-marker.high { animation:none; }
+  .flood-marker, .rain-marker.high, .rs-dot.alert { animation:none; }
 }
