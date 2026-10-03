@@ -109,3 +109,65 @@ footer {
     background: #f1f1f1;
     border-top: 1px solid #ddd;
 }
+
+.district.flooded {
+    background: #ffe5e5;
+    border-left: 5px solid #d00000;
+}
+
+.flood-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: #d00000;
+    color: #fff;
+    font-size: 12px;
+    font-weight: normal;
+}
+
+#notice.flood {
+    background: #d00000;
+    color: #fff;
+    font-weight: bold;
+}
+
+.flood-marker {
+    background: #d00000;
+    color: #fff;
+    border: 2px solid #fff;
+    border-radius: 14px;
+    padding: 2px 8px;
+    font-size: 13px;
+    font-weight: bold;
+    white-space: nowrap;
+    box-shadow: 0 0 0 0 rgba(208, 0, 0, .7);
+    animation: flood-pulse 1.6s infinite;
+}
+
+@keyframes flood-pulse {
+    70% { box-shadow: 0 0 0 12px rgba(208, 0, 0, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(208, 0, 0, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .flood-marker { animation: none; }
+}
+
+.legend {
+    background: rgba(255, 255, 255, .92);
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.legend i {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 6px;
+    vertical-align: middle;
+    border: 2px solid #d00000;
+    background: rgba(208, 0, 0, .35);
+}
