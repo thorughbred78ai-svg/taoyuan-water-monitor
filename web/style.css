@@ -249,3 +249,30 @@ footer {
 .rl-bar { display: flex; flex-direction: column; width: 28px; }
 .rl-bar div { height: var(--bh); }
 .rl-note { margin-top: 6px; font-size: 11px; color: #666; max-width: 120px; line-height: 1.3; }
+
+/* ---- 多則提示 ---- */
+#notice { background: none !important; padding: 0 !important; border: 0 !important; }
+.nmsg { margin-top: 6px; padding: 6px 10px; border-radius: 4px; font-size: 13px; }
+.nmsg.warn { background: #fff3cd; color: #5c4400; }
+.nmsg.flood { background: #d00000; color: #fff; font-weight: bold; }
+.nmsg.forecast { background: #fff0d6; color: #7a3d00; border: 1px solid #f0a500; }
+.nmsg.rain { background: #7f0000; color: #fff; font-weight: bold; }
+.nmsg.rain-possible { background: #ffe8cc; color: #7a3d00; border: 1px solid #ff8c00; }
+
+/* ---- 雨量 >60mm 警示 ---- */
+.rain-marker {
+    padding: 2px 8px;
+    border-radius: 14px;
+    border: 2px solid #fff;
+    font-size: 13px;
+    font-weight: bold;
+    white-space: nowrap;
+    color: #fff;
+}
+.rain-marker.high { background: #7f0000; animation: flood-pulse 1.6s infinite; }
+.rain-marker.possible { background: #e67e00; }
+@media (prefers-reduced-motion: reduce) { .rain-marker.high { animation: none; } }
+
+.district.rain-alert { border-left: 5px solid #7f0000; background: #ffeceb; }
+.district.flooded.rain-alert { border-left-color: #d00000; }
+.flood-badge.rain { background: #7f0000; }
