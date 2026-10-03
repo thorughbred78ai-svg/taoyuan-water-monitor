@@ -1,278 +1,644 @@
+:root {
+  --bg-0:#f4f6f9;
+  --bg-1:#fff;
+  --panel:#fff;
+  --panel-2:#f7f9fc;
+  --line:#e3e8ef;
+  --line-2:#edf1f6;
+  --text-1:#1b2430;
+  --text-2:#566274;
+  --text-3:#8a94a6;
+  --accent:#0b6ea8;
+  --accent-2:#0e7a91;
+  --ok:#1a7f5f;
+  --run:#b3671b;
+  --err:#c03030;
+  --shadow:0 1px 2px rgba(16,24,40,.05);
+  --radius:8px;
+  --radius-s:6px;
+  --rain-1:#dbeafe;
+  --rain-2:#93c5fd;
+  --rain-3:#38bdf8;
+  --rain-4:#0ea5e9;
+  --rain-5:#0369a1;
+  --rain-6:#7c3aed;
+}
+html[data-theme="dark"] {
+  --bg-0:#0e131b;
+  --bg-1:#131a24;
+  --panel:#151c27;
+  --panel-2:#111823;
+  --line:#242e3d;
+  --line-2:#1c2534;
+  --text-1:#e9edf4;
+  --text-2:#9fabbf;
+  --text-3:#64718a;
+  --accent:#58a6d6;
+  --accent-2:#7cc3e8;
+  --ok:#3fae86;
+  --run:#d9a441;
+  --err:#e07a7a;
+  --rain-1:#172c42;
+  --rain-2:#1d4d70;
+  --rain-3:#14658d;
+  --rain-4:#1688ba;
+  --rain-5:#58a6d6;
+  --rain-6:#a78bfa;
+}
+* {
+  box-sizing:border-box;
+}
 html,
 body {
-    margin: 0;
-    padding: 0;
-    height: 100%;
-    font-family:
-        system-ui,
-        -apple-system,
-        BlinkMacSystemFont,
-        "Noto Sans TC",
-        sans-serif;
+  margin:0;
+  min-height:100%;
 }
-
 body {
-    display: flex;
-    flex-direction: column;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    "Noto Sans TC",
+    "PingFang TC",
+    "Microsoft JhengHei",
+    sans-serif;
+  background:var(--bg-0);
+  color:var(--text-1);
+  font-size:14px;
+  line-height:1.45;
 }
-
-header {
-    background: #0b3d5c;
-    color: white;
-    padding: 12px 20px;
+button,
+select,
+input {
+  font:inherit;
 }
-
-header h1 {
-    margin: 0;
-    font-size: 20px;
+/* =========================
+   TOPBAR
+========================= */
+.topbar {
+  position:sticky;
+  top:0;
+  z-index:1000;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  padding:9px 16px;
+  background:var(--bg-1);
+  border-bottom:1px solid var(--line);
 }
-
-#updated {
-    margin-top: 4px;
-    font-size: 13px;
-    opacity: 0.8;
+.brand {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:0;
 }
-
-main {
-    flex: 1;
-    min-height: 0;
-    display: flex;
+.brand-mark {
+  width:34px;
+  height:34px;
+  display:grid;
+  place-items:center;
+  border-radius:8px;
+  background:var(--accent);
+  color:#fff;
+  font-size:18px;
+  font-weight:800;
 }
-
-#map {
-    flex: 1;
-    min-height: 500px;
+.brand-text h1 {
+  margin:0;
+  font-size:15px;
+  font-weight:800;
 }
-
-aside {
-    width: 320px;
-    overflow-y: auto;
-    background: white;
-    border-left: 1px solid #ddd;
-    padding: 15px;
+.brand-sub {
+  margin-top:1px;
+  color:var(--text-3);
+  font-size:11px;
 }
-
-aside h2 {
-    margin-top: 0;
+.topbar-right {
+  display:flex;
+  align-items:center;
+  gap:8px;
 }
-
-.district {
-    padding: 10px;
-    margin-bottom: 8px;
-    border-radius: 6px;
-    background: #f5f5f5;
+.live {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:5px 10px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  background:var(--panel-2);
+  color:var(--text-2);
+  font-size:12px;
+  font-weight:600;
 }
-
+.live-dot {
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:var(--ok);
+  box-shadow:0 0 0 3px rgba(26,127,95,.12);
+}
+.clock {
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    Consolas,
+    monospace;
+  font-size:15px;
+  font-weight:700;
+  font-variant-numeric:tabular-nums;
+}
+.theme-toggle {
+  width:32px;
+  height:32px;
+  display:grid;
+  place-items:center;
+  border:1px solid var(--line);
+  border-radius:6px;
+  background:var(--panel-2);
+  color:var(--text-2);
+  cursor:pointer;
+}
+/* =========================
+   ALERT
+========================= */
+.alert {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:7px 16px;
+  background:#fffbeb;
+  border-bottom:1px solid #fef08a;
+  color:#854d0e;
+  font-size:12.5px;
+}
+html[data-theme="dark"] .alert {
+  background:#231c0a;
+  border-color:#4d3810;
+  color:#fde047;
+}
+.alert-badge {
+  padding:2px 7px;
+  border-radius:4px;
+  background:#fef08a;
+  color:#854d0e;
+  font-size:10.5px;
+  font-weight:800;
+}
+html[data-theme="dark"] .alert-badge {
+  background:#4d3810;
+  color:#fde047;
+}
+.alert-text {
+  font-weight:600;
+}
+/* =========================
+   DASHBOARD
+========================= */
+.dashboard {
+  display:grid;
+  grid-template-columns:
+    300px
+    minmax(0,1fr)
+    280px;
+  gap:10px;
+  padding:10px 16px;
+}
+.left,
+.center,
+.right {
+  min-width:0;
+}
+.left,
+.right {
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.panel {
+  min-width:0;
+  overflow:hidden;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+}
+.panel-head {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:9px 12px;
+  background:var(--panel-2);
+  border-bottom:1px solid var(--line-2);
+}
+.panel-title {
+  margin:0;
+  color:var(--text-2);
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:.05em;
+}
+.panel-hint {
+  color:var(--text-3);
+  font-size:10.5px;
+}
+/* =========================
+   KPI
+========================= */
+.kpi-grid {
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:6px;
+  padding:10px;
+}
+.kpi {
+  padding:10px;
+  background:var(--panel-2);
+  border:1px solid var(--line-2);
+  border-radius:6px;
+}
+.kpi-label {
+  color:var(--text-3);
+  font-size:10.5px;
+}
+.kpi-value {
+  margin-top:3px;
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    Consolas,
+    monospace;
+  font-size:23px;
+  font-weight:800;
+  font-variant-numeric:tabular-nums;
+}
+.kpi-unit {
+  margin-left:2px;
+  color:var(--text-3);
+  font-size:10px;
+  font-weight:500;
+}
+/* =========================
+   SEARCH
+========================= */
+.search {
+  padding:10px;
+}
+.search input {
+  width:100%;
+  padding:7px 9px;
+  background:var(--bg-1);
+  color:var(--text-1);
+  border:1px solid var(--line);
+  border-radius:6px;
+  outline:none;
+}
+.search input:focus {
+  border-color:var(--accent);
+}
+/* =========================
+   RANK
+========================= */
+.rank-list {
+  max-height:440px;
+  overflow:auto;
+}
+.rank-item {
+  display:grid;
+  grid-template-columns:25px minmax(0,1fr) auto;
+  gap:7px;
+  align-items:center;
+  padding:8px 12px;
+  border-bottom:1px solid var(--line-2);
+}
+.rank-no {
+  width:20px;
+  height:20px;
+  display:grid;
+  place-items:center;
+  border-radius:5px;
+  color:var(--text-3);
+  font-size:10px;
+}
+.rank-item:first-child .rank-no {
+  background:var(--accent);
+  color:#fff;
+  font-weight:800;
+}
+.rank-name {
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:12px;
+  font-weight:700;
+}
+.rank-sub {
+  margin-top:1px;
+  color:var(--text-3);
+  font-size:10px;
+}
+.rank-value {
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    Consolas,
+    monospace;
+  font-size:13px;
+  font-weight:800;
+  white-space:nowrap;
+}
+/* =========================
+   MAP
+========================= */
+.map-panel {
+  height:100%;
+  min-height:620px;
+  display:flex;
+  flex-direction:column;
+}
+.map {
+  flex:1;
+  min-height:0;
+}
+.leaflet-container {
+  background:#dfe7ee;
+}
+html[data-theme="dark"] .leaflet-tile {
+  filter:invert(1) grayscale(.8) brightness(.82) contrast(.95);
+}
+/* =========================
+   STATION
+========================= */
+.station-list {
+  max-height:270px;
+  overflow:auto;
+}
+.station {
+  padding:8px 12px;
+  border-bottom:1px solid var(--line-2);
+}
+.station-top {
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+}
+.station-name {
+  font-size:12px;
+  font-weight:700;
+}
+.station-value {
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    Consolas,
+    monospace;
+  font-size:12px;
+  font-weight:800;
+}
+.station-meta {
+  margin-top:2px;
+  color:var(--text-3);
+  font-size:10.5px;
+}
+/* =========================
+   WARNING
+========================= */
+.warning-list {
+  padding:8px 12px;
+}
+.warning {
+  display:flex;
+  gap:8px;
+  padding:7px 0;
+  border-bottom:1px solid var(--line-2);
+}
+.warning:last-child {
+  border-bottom:none;
+}
+.warning-dot {
+  width:7px;
+  height:7px;
+  flex:none;
+  margin-top:6px;
+  border-radius:50%;
+  background:var(--run);
+}
+.warning-danger .warning-dot {
+  background:var(--err);
+}
+.warning-title {
+  font-size:12px;
+  font-weight:700;
+}
+.warning-desc {
+  margin-top:1px;
+  color:var(--text-3);
+  font-size:10.5px;
+}
+/* =========================
+   DISTRICT
+========================= */
+.district-panel {
+  grid-column:1 / -1;
+}
+.district-grid {
+  display:grid;
+  grid-template-columns:
+    repeat(auto-fill,minmax(175px,1fr));
+  gap:6px;
+  padding:10px 12px;
+}
+.district-card {
+  position:relative;
+  padding:9px 10px 8px;
+  background:var(--bg-1);
+  border:1px solid var(--line-2);
+  border-radius:5px;
+}
+.district-card:hover {
+  border-color:var(--line);
+}
+.district-top {
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:8px;
+}
 .district-name {
-    font-weight: bold;
+  font-size:12.5px;
+  font-weight:700;
+}
+.district-rain {
+  font-family:
+    ui-monospace,
+    "SF Mono",
+    Consolas,
+    monospace;
+  font-size:17px;
+  font-weight:800;
+}
+.district-rain small {
+  color:var(--text-3);
+  font-size:9px;
+  font-weight:500;
+}
+.district-meta {
+  display:flex;
+  justify-content:space-between;
+  margin-top:4px;
+  color:var(--text-3);
+  font-size:10.5px;
+}
+.meter {
+  height:3px;
+  margin-top:7px;
+  overflow:hidden;
+  background:var(--line-2);
+  border-radius:2px;
+}
+.meter i {
+  display:block;
+  height:100%;
+  background:var(--accent);
+  border-radius:2px;
+  transition:width .3s;
+}
+.rain-heavy .meter i {
+  background:var(--run);
+}
+.rain-heavy .district-rain {
+  color:var(--run);
+}
+/* =========================
+   FOOTER
+========================= */
+.source {
+  padding:4px 16px 10px;
+  color:var(--text-3);
+  font-size:10.5px;
+}
+.source a {
+  color:var(--accent);
+  text-decoration:none;
+}
+/* =========================
+   RESPONSIVE
+========================= */
+@media (max-width:1100px) {
+  .dashboard {
+    grid-template-columns:280px minmax(0,1fr);
+  }
+  .right {
+    grid-column:1 / -1;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+  }
+  .district-panel {
+    grid-column:1 / -1;
+  }
+}
+@media (max-width:820px) {
+  .topbar {
+    align-items:flex-start;
+    flex-direction:column;
+  }
+  .topbar-right {
+    width:100%;
+    justify-content:flex-end;
+  }
+  .dashboard {
+    grid-template-columns:1fr;
+    padding:8px 10px;
+  }
+  .left,
+  .center,
+  .right,
+  .district-panel {
+    grid-column:1;
+  }
+  .right {
+    display:flex;
+  }
+  .map-panel {
+    min-height:440px;
+  }
+  .district-grid {
+    grid-template-columns:repeat(2,1fr);
+  }
+}
+@media (max-width:520px) {
+  .district-grid {
+    grid-template-columns:1fr;
+  }
+  .topbar {
+    padding:7px 10px;
+  }
+  .brand-text h1 {
+    font-size:14px;
+  }
+  .clock {
+    font-size:13px;
+  }
+  .alert {
+    padding:7px 10px;
+  }
 }
 
-.district-value {
-    margin-top: 5px;
-    font-size: 13px;
+/* =========================
+   EXTENSIONS (water monitor)
+========================= */
+.topbar { flex-wrap:wrap; }
+.topbar-controls { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; font-size:13px; }
+.topbar-controls #windowText { color:var(--text-2); font-size:12px; }
+.topbar-controls label { display:flex; align-items:center; gap:6px; color:var(--text-2); white-space:nowrap; }
+.topbar-controls select { padding:4px 8px; background:var(--bg-1); color:var(--text-1); border:1px solid var(--line); border-radius:6px; }
+
+#alerts:empty { display:none; }
+.alert.red { background:#fef2f2; border-bottom-color:#fecaca; color:#991b1b; }
+.alert.red .alert-badge { background:#fecaca; color:#991b1b; }
+.alert.orange { background:#fff7ed; border-bottom-color:#fed7aa; color:#9a3412; }
+.alert.orange .alert-badge { background:#fed7aa; color:#9a3412; }
+html[data-theme="dark"] .alert.red { background:#2a1212; border-color:#5b2020; color:#fca5a5; }
+html[data-theme="dark"] .alert.red .alert-badge { background:#5b2020; color:#fca5a5; }
+html[data-theme="dark"] .alert.orange { background:#26170b; border-color:#5a3512; color:#fdba74; }
+html[data-theme="dark"] .alert.orange .alert-badge { background:#5a3512; color:#fdba74; }
+
+.empty-note { padding:16px 12px; color:var(--text-3); font-size:12px; text-align:center; }
+
+.leaflet-control.legend { background:var(--panel); color:var(--text-1); border-radius:6px; box-shadow:0 1px 4px rgba(0,0,0,.3); }
+.rain-legend { padding:8px 10px; }
+:root { --bh:18px; }
+@media (max-height:760px) { :root { --bh:13px; } }
+.rl-title { font-size:12px; font-weight:700; text-align:center; margin-bottom:6px; color:var(--text-2); }
+.rl-body { display:flex; }
+.rl-labels { position:relative; width:34px; height:calc(var(--bh) * 17); }
+.rl-labels span { position:absolute; right:6px; transform:translateY(-50%); font-size:11px; line-height:1; color:var(--text-2); }
+.rl-bar { display:flex; flex-direction:column; width:28px; }
+.rl-bar div { height:var(--bh); }
+
+.flood-marker, .rain-marker {
+  padding:2px 8px; border-radius:14px; border:2px solid #fff; font-size:12.5px;
+  font-weight:700; white-space:nowrap; color:#fff;
 }
+.flood-marker { background:#d00000; animation:pulse 1.6s infinite; }
+.rain-marker.high { background:#7f0000; animation:pulse 1.6s infinite; }
+.rain-marker.possible { background:#e67e00; }
+@keyframes pulse { 70% { box-shadow:0 0 0 12px rgba(208,0,0,0); } 100% { box-shadow:0 0 0 0 rgba(208,0,0,0); } }
+@media (prefers-reduced-motion: reduce) { .flood-marker, .rain-marker.high { animation:none; } }
 
-@media (max-width: 800px) {
+.badge { display:inline-block; margin-left:6px; padding:1px 6px; border-radius:10px; font-size:10.5px; font-weight:700; color:#fff; background:var(--err); }
+.badge.rain { background:#7f0000; }
+.badge.maybe { background:#e67e00; }
+.district-card { cursor:pointer; }
+.district-card.flooded { border-color:#d00000; box-shadow:inset 4px 0 0 #d00000; }
+.district-card.rain-alert { box-shadow:inset 4px 0 0 #7f0000; }
+.district-card .sub { display:flex; justify-content:space-between; margin-top:2px; color:var(--text-3); font-size:10.5px; }
+.station { cursor:pointer; }
+.station:hover { background:var(--panel-2); }
+.sys-row { display:flex; justify-content:space-between; gap:8px; padding:6px 0; border-bottom:1px solid var(--line-2); }
+.sys-row:last-child { border-bottom:none; }
+.sys-row span { color:var(--text-3); }
+.sys-row strong { text-align:right; }
+.note-small { padding:6px 12px 10px; color:var(--text-3); font-size:10.5px; }
 
-    main {
-        flex-direction: column;
-    }
-
-    #map {
-        height: 60vh;
-        flex: none;
-    }
-
-    aside {
-        width: auto;
-        height: 40vh;
-        border-left: none;
-        border-top: 1px solid #ddd;
-    }
-}
-
-#notice {
-    margin-top: 6px;
-    padding: 6px 10px;
-    background: #fff3cd;
-    color: #5c4400;
-    border-radius: 4px;
-    font-size: 13px;
-}
-
-#notice[hidden] { display: none; }
-
-footer {
-    padding: 6px 20px;
-    font-size: 12px;
-    color: #555;
-    background: #f1f1f1;
-    border-top: 1px solid #ddd;
-}
-
-.district.flooded {
-    background: #ffe5e5;
-    border-left: 5px solid #d00000;
-}
-
-.flood-badge {
-    display: inline-block;
-    margin-left: 6px;
-    padding: 1px 6px;
-    border-radius: 10px;
-    background: #d00000;
-    color: #fff;
-    font-size: 12px;
-    font-weight: normal;
-}
-
-#notice.flood {
-    background: #d00000;
-    color: #fff;
-    font-weight: bold;
-}
-
-.flood-marker {
-    background: #d00000;
-    color: #fff;
-    border: 2px solid #fff;
-    border-radius: 14px;
-    padding: 2px 8px;
-    font-size: 13px;
-    font-weight: bold;
-    white-space: nowrap;
-    box-shadow: 0 0 0 0 rgba(208, 0, 0, .7);
-    animation: flood-pulse 1.6s infinite;
-}
-
-@keyframes flood-pulse {
-    70% { box-shadow: 0 0 0 12px rgba(208, 0, 0, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(208, 0, 0, 0); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .flood-marker { animation: none; }
-}
-
-.legend {
-    background: rgba(255, 255, 255, .92);
-    padding: 6px 10px;
-    border-radius: 4px;
-    font-size: 12px;
-    line-height: 1.6;
-}
-
-.legend i {
-    display: inline-block;
-    width: 14px;
-    height: 14px;
-    margin-right: 6px;
-    vertical-align: middle;
-    border: 2px solid #d00000;
-    background: rgba(208, 0, 0, .35);
-}
-
-.controls {
-    margin-top: 8px;
-    font-size: 14px;
-}
-
-.controls select {
-    font-size: 14px;
-    padding: 2px 6px;
-    border-radius: 4px;
-}
-
-.legend .sw {
-    display: inline-block;
-    width: 12px;
-    height: 12px;
-    margin-right: 4px;
-    vertical-align: middle;
-    border: 1px solid #888;
-}
-
-.legend .row { white-space: nowrap; }
-
-#notice.forecast {
-    background: #fff0d6;
-    color: #7a3d00;
-    border: 1px solid #f0a500;
-}
-
-/* ---- header: 標題 / 統計區間 / 下拉選單 併排，時鐘靠最右 ---- */
-.hdr-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px 20px;
-}
-
-.hdr-row h1 { margin: 0; white-space: nowrap; }
-
-.hdr-controls {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 6px 16px;
-    font-size: 14px;
-}
-
-.hdr-controls #updated { margin: 0; font-size: 13px; opacity: .9; }
-.hdr-controls label { white-space: nowrap; }
-.hdr-controls select { font-size: 14px; padding: 2px 6px; border-radius: 4px; }
-
-#clock {
-    margin-left: auto;
-    font-size: 16px;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-}
-
-/* ---- 雨量級距色帶（圖面型式）---- */
-:root { --bh: 18px; }
-@media (max-height: 760px) { :root { --bh: 13px; } }
-
-.rain-legend { padding: 8px 10px; }
-.rl-title { font-family: "Noto Serif TC", serif; color: #6b5b00; font-size: 13px; text-align: center; margin-bottom: 6px; }
-.rl-body { display: flex; }
-.rl-labels { position: relative; width: 34px; height: calc(var(--bh) * 17); }
-.rl-labels span {
-    position: absolute;
-    right: 6px;
-    transform: translateY(-50%);
-    font-family: "Noto Serif TC", serif;
-    font-size: 12px;
-    color: #5a4a00;
-    line-height: 1;
-}
-.rl-bar { display: flex; flex-direction: column; width: 28px; }
-.rl-bar div { height: var(--bh); }
-.rl-note { margin-top: 6px; font-size: 11px; color: #666; max-width: 120px; line-height: 1.3; }
-
-/* ---- 多則提示 ---- */
-#notice { background: none !important; padding: 0 !important; border: 0 !important; }
-.nmsg { margin-top: 6px; padding: 6px 10px; border-radius: 4px; font-size: 13px; }
-.nmsg.warn { background: #fff3cd; color: #5c4400; }
-.nmsg.flood { background: #d00000; color: #fff; font-weight: bold; }
-.nmsg.forecast { background: #fff0d6; color: #7a3d00; border: 1px solid #f0a500; }
-.nmsg.rain { background: #7f0000; color: #fff; font-weight: bold; }
-.nmsg.rain-possible { background: #ffe8cc; color: #7a3d00; border: 1px solid #ff8c00; }
-
-/* ---- 雨量 >60mm 警示 ---- */
-.rain-marker {
-    padding: 2px 8px;
-    border-radius: 14px;
-    border: 2px solid #fff;
-    font-size: 13px;
-    font-weight: bold;
-    white-space: nowrap;
-    color: #fff;
-}
-.rain-marker.high { background: #7f0000; animation: flood-pulse 1.6s infinite; }
-.rain-marker.possible { background: #e67e00; }
-@media (prefers-reduced-motion: reduce) { .rain-marker.high { animation: none; } }
-
-.district.rain-alert { border-left: 5px solid #7f0000; background: #ffeceb; }
-.district.flooded.rain-alert { border-left-color: #d00000; }
-.flood-badge.rain { background: #7f0000; }
