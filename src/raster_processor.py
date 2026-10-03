@@ -1,6 +1,6 @@
-
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -8,7 +8,7 @@ import numpy as np
 from rasterio.io import MemoryFile
 from rasterio.transform import Affine, from_bounds
 
-from config import COLOR_TOLERANCE, DRY_IF_TRANSPARENT, RAINFALL_CLASSES
+from config import COLOR_TOLERANCE, DRY_IF_TRANSPARENT, RAINFALL_CLASSES, TWD97_TM2, WGS84
 from spatial import district_masks
 
 log = logging.getLogger(__name__)
@@ -179,12 +179,49 @@ def process_inundation(body: bytes, metadata: dict | None, districts) -> dict[st
     cell_km2 = abs(transform.a * transform.e) / 1e6
     masks = district_masks(districts, transform, rgba.shape[:2])
     wet = rgba[..., 3] > 0
+    everywhere = np.ones(rgba.shape[:2], dtype=bool)
     return {
         "available": True,
         "assumption": "non-transparent pixel = inundated (verify against WRA legend)",
         "cell_area_km2": cell_km2,
+        "raster": {
+            "width": int(rgba.shape[1]),
+            "height": int(rgba.shape[0]),
+            **png_info(body),
+            "colored_pixels_total": int(wet.sum()),
+            "alpha_values": [int(v) for v in np.unique(rgba[..., 3])[:10]],
+        },
+        "color_histogram": color_histogram(rgba, everywhere, top=20),
         "districts": {
-            n: {"area_km2": round(float((m & wet).sum()) * cell_km2, 3)}
+            n: {
+                "area_km2": round(float((m & wet).sum()) * cell_km2, 4),
+                "wet_pixels": int((m & wet).sum()),
+            }
             for n, m in masks.items()
         },
     }
+
+
+def inundation_geojson(body: bytes, metadata: dict | None, districts,
+                       max_features: int = 5000) -> dict[str, Any]:
+    """Vectorize inundated pixels (inside Taoyuan districts) into a WGS84 FeatureCollection."""
+    import geopandas as gpd
+    from rasterio import features as rfeatures
+    from shapely.geometry import shape
+
+    empty: dict[str, Any] = {"type": "FeatureCollection", "features": []}
+    if not is_png(body):
+        return empty
+    rgba = read_rgba(body)
+    transform = build_transform(metadata or {}, rgba.shape[:2])
+    masks = district_masks(districts, transform, rgba.shape[:2])
+    inside = np.logical_or.reduce(list(masks.values()))
+    wet = (rgba[..., 3] > 0) & inside
+    if not wet.any():
+        return empty
+    geoms = [
+        shape(g)
+        for g, _ in rfeatures.shapes(wet.astype(np.uint8), mask=wet, transform=transform)
+    ][:max_features]
+    gdf = gpd.GeoDataFrame(geometry=geoms, crs=TWD97_TM2).to_crs(WGS84)
+    return json.loads(gdf.to_json(drop_id=True))
