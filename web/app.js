@@ -106,7 +106,7 @@ L.control.layers(null, {
 }, { collapsed: true, position: "topright" }).addTo(map);
 
 function addLegend() {
-    const legend = L.control({ position: "bottomleft" });
+    const legend = L.control({ position: "bottomright" });
     legend.onAdd = () => {
         const div = L.DomUtil.create("div", "legend rain-legend");
         div.innerHTML =
@@ -256,7 +256,7 @@ async function renderRain() {
                 const isAlert = selectedRain === hours && f.properties.lo >= mm;
                 return {
                     color: "#7f0000", stroke: isAlert, weight: isAlert ? 2.5 : 0,
-                    fillColor: rainfallColor(f.properties.lo), fillOpacity: 0.78
+                    fillColor: rainfallColor(f.properties.lo), fillOpacity: 0.72
                 };
             }
         }).addTo(rainLayer);
@@ -359,7 +359,8 @@ function renderAlerts() {
     buildMessages().forEach(m => {
         const row = document.createElement("div");
         row.className = `alert ${m.cls}`.trim();
-        const b = document.createElement("span"); b.className = "alert-badge"; b.textContent = m.badge;
+        const icon = m.cls === "red" ? "⚠" : m.cls === "orange" ? "▲" : "ℹ";
+        const b = document.createElement("span"); b.className = "alert-badge"; b.textContent = `${icon} ${m.badge}`;
         const t = document.createElement("span"); t.className = "alert-text"; t.textContent = m.text;
         row.append(b, t);
         box.appendChild(row);
@@ -483,11 +484,15 @@ function setupSelects() {
 }
 
 function startClock() {
+    const fmtParts = new Intl.DateTimeFormat("zh-TW", {
+        timeZone: "Asia/Taipei", hour12: false, year: "numeric", month: "2-digit",
+        day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit"
+    });
     const tick = () => {
-        $("clock").textContent = new Date().toLocaleString("zh-TW", {
-            timeZone: "Asia/Taipei", hour12: false, year: "numeric", month: "2-digit",
-            day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit"
-        }) + " (臺灣)";
+        const p = Object.fromEntries(fmtParts.formatToParts(new Date()).map(x => [x.type, x.value]));
+        $("clock").innerHTML =
+            `<span class="clock-date">${p.year}/${p.month}/${p.day} </span>` +
+            `${p.hour}:${p.minute}:${p.second}<span class="clock-tz"> (臺灣)</span>`;
     };
     tick(); setInterval(tick, 1000);
 }
@@ -497,6 +502,8 @@ function setupTheme() {
     try {
         const saved = localStorage.getItem(KEY);
         if (saved) document.documentElement.setAttribute("data-theme", saved);
+        else if (window.matchMedia?.("(prefers-color-scheme: dark)").matches)
+            document.documentElement.setAttribute("data-theme", "dark");
     } catch { /* storage 不可用時略過 */ }
     $("themeToggle").addEventListener("click", () => {
         const html = document.documentElement;
