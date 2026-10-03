@@ -3,41 +3,48 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
 <meta name="description" content="桃園市即時水情監測：雨量網格、氣象署雨量測站、淹水範圍與雨量警示。">
 <title>桃園市即時水情監測</title>
+<link rel="icon" type="image/png" href="assets/favicon.png">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<header class="topbar">
-  <div class="brand">
-    <div class="brand-mark">雨</div>
-    <div class="brand-text">
-      <h1>桃園市即時水情監測</h1>
-      <div class="brand-sub">TAOYUAN WATER MONITOR</div>
+<div class="sticky-head">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logos">
+        <img src="assets/logo-city.png" alt="桃園市政府" height="48">
+        <img src="assets/logo-dwr.png" alt="桃園市政府水務局" height="48">
+      </div>
+      <div class="brand-text">
+        <h1>桃園市即時水情監測</h1>
+        <div class="brand-sub">TAOYUAN WATER MONITOR · 創建者:HHHuang</div>
+      </div>
     </div>
-  </div>
 
-  <div class="topbar-controls">
-    <span id="windowText">載入中...</span>
-    <label>累積雨量延時
-      <select id="rainHours" disabled><option>1 小時</option></select>
-    </label>
-    <label>淹水範圍
-      <select id="floodHour" disabled><option>目前即時</option></select>
-    </label>
-  </div>
+    <div class="topbar-controls">
+      <span id="windowText">載入中...</span>
+      <label>累積雨量延時
+        <select id="rainHours" disabled><option>1 小時</option></select>
+      </label>
+      <label>淹水範圍
+        <select id="floodHour" disabled><option>目前即時</option></select>
+      </label>
+    </div>
 
-  <div class="topbar-right">
-    <div class="live"><span class="live-dot" id="liveDot"></span><span id="liveText">LIVE</span></div>
-    <div class="clock" id="clock" title="臺灣目前時間">--:--:--</div>
-    <button class="theme-toggle" id="themeToggle" title="切換亮暗色" aria-label="切換亮暗色">◐</button>
-  </div>
-</header>
+    <div class="topbar-right">
+      <div class="live"><span class="live-dot" id="liveDot"></span><span id="liveText">LIVE</span></div>
+      <div class="clock" id="clock" title="臺灣目前時間">--:--:--</div>
+      <button class="theme-toggle" id="themeToggle" title="切換亮暗色" aria-label="切換亮暗色">◐</button>
+    </div>
+  </header>
 
-<div id="alerts" role="status" aria-live="polite"></div>
+  <div id="alerts" role="status" aria-live="polite"></div>
+</div>
 
 <main class="dashboard">
 
@@ -66,14 +73,6 @@
       </div>
       <div class="rank-list" id="rankList"></div>
     </section>
-
-    <section class="panel">
-      <div class="panel-head"><h2 class="panel-title">測站搜尋</h2></div>
-      <div class="search">
-        <input id="stationSearch" type="search" placeholder="輸入測站名稱、行政區或代碼..." aria-label="搜尋測站">
-      </div>
-      <div class="station-list" id="stationList"></div>
-    </section>
   </aside>
 
   <section class="center">
@@ -96,8 +95,16 @@
     </section>
 
     <section class="panel">
+      <div class="panel-head"><h2 class="panel-title">測站搜尋</h2></div>
+      <div class="search">
+        <input id="stationSearch" type="search" placeholder="輸入測站名稱、行政區或代碼..." aria-label="搜尋測站">
+      </div>
+      <div class="station-list" id="stationList"></div>
+    </section>
+
+    <section class="panel">
       <div class="panel-head"><h2 class="panel-title">系統狀態</h2></div>
-      <div style="padding:12px" id="sysStatus"></div>
+      <div class="sys" id="sysStatus"></div>
     </section>
   </aside>
 
@@ -111,12 +118,15 @@
 
 </main>
 
-<div class="source">
-  資料來源：經濟部水利署開放資料（雨量網格、淹水範圍）、
-  <a href="https://www.cwa.gov.tw/" target="_blank" rel="noopener">交通部中央氣象署</a>
-  開放資料（雨量觀測站）。自動彙整，僅供參考，非官方警戒或預警；
-  防災決策請以中央氣象署、水利署及桃園市政府公告為準。
-</div>
+<footer class="source">
+  <div>
+    資料來源：經濟部水利署開放資料（雨量網格、淹水範圍）、
+    <a href="https://www.cwa.gov.tw/" target="_blank" rel="noopener">交通部中央氣象署</a>
+    開放資料（雨量觀測站）。自動彙整，僅供參考，非官方警戒或預警；
+    防災決策請以中央氣象署、水利署及桃園市政府公告為準。
+  </div>
+  <div class="creator">創建者:HHHuang</div>
+</footer>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
