@@ -273,3 +273,7 @@ html[data-theme="dark"] .badge.maybe { background:var(--watch); }
 @media (prefers-reduced-motion: reduce) {
   .flood-marker, .rain-marker.high, .rs-dot.alert { animation:none; }
 }
+
+.sys-controls { padding-top:0; }
+.sys-controls select { padding:4px 8px; min-height:30px; background:var(--panel); color:var(--text-1); border:1px solid var(--line); border-radius:6px; }
+.note-small { padding:4px 0 0; color:var(--text-3); font-size:11px; line-height:1.4; }
