@@ -52,10 +52,29 @@ def fetch_road_sensors() -> list[dict[str, Any]]:
     resp = session.get(ROAD_SENSOR_URL, timeout=HTTP_TIMEOUT)
     log.info("road sensors HTTP %s size=%d", resp.status_code, len(resp.content))
     resp.raise_for_status()
-    data = resp.json()
+    return extract_items(resp.json())
+
+
+def extract_items(data: Any) -> list[dict[str, Any]]:
+    """API 一次回傳全部感測點（單一 JSON 陣列）。也容忍常見的包裝格式。"""
+    if isinstance(data, dict):
+        for key in ("records", "data", "result", "items"):
+            if isinstance(data.get(key), list):
+                data = data[key]
+                break
+            if isinstance(data.get(key), dict) and isinstance(data[key].get("records"), list):
+                data = data[key]["records"]
+                break
     if not isinstance(data, list):
         raise ValueError(f"Unexpected road sensor payload type: {type(data).__name__}")
-    return data
+    seen: set[str] = set()
+    out = []
+    for it in data:  # 以 id 去重（保留最後一筆）
+        if isinstance(it, dict):
+            seen.add(str(it.get("id")))
+            out.append(it)
+    log.info("road sensors: %d items (%d unique ids)", len(out), len(seen))
+    return list({str(i.get("id")): i for i in out}.values())
 
 
 def parse_road_sensors(items: list[dict[str, Any]], districts: gpd.GeoDataFrame,
