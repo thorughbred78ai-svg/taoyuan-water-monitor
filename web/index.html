@@ -1,67 +1,33 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
-
 <head>
-
   <meta charset="UTF-8">
-
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
-
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>桃園市即時水情監測</title>
-
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  >
-
-  <link
-    rel="stylesheet"
-    href="style.css"
-  >
-
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
-
 <header>
-
-  <div>
-    <h1>桃園市即時水情監測</h1>
-
-    <div id="updated">
-      載入中...
-    </div>
-  </div>
-
+  <h1>桃園市即時水情監測</h1>
+  <div id="updated">載入中...</div>
+  <div id="notice" hidden></div>
 </header>
-
-
 <main>
-
   <div id="map"></div>
-
   <aside>
-
     <h2>行政區</h2>
-
-    <div id="district-list">
-      載入中...
-    </div>
-
+    <div id="district-list">載入中...</div>
   </aside>
-
 </main>
-
-
-<script
-  src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
-</script>
-
+<footer>
+  資料來源：經濟部水利署開放資料，自動彙整，僅供參考，非官方警戒或預警資訊；
+  防災決策請以中央氣象署、水利署及桃園市政府公告為準。
+</footer>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script src="app.js"></script>
-
 </body>
-
 </html>
+
