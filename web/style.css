@@ -277,3 +277,68 @@ html[data-theme="dark"] .badge.maybe { background:var(--watch); }
 .sys-controls { padding-top:0; }
 .sys-controls select { padding:4px 8px; min-height:30px; background:var(--panel); color:var(--text-1); border:1px solid var(--line); border-radius:6px; }
 .note-small { padding:4px 0 0; color:var(--text-3); font-size:11px; line-height:1.4; }
+
+/* =====================================================
+   區塊顯示/隱藏、行政區橫向列、警戒輪播
+===================================================== */
+.viewbar {
+  display:flex; align-items:center; gap:8px 12px; padding:6px 16px;
+  background:var(--bg-0); border-bottom:1px solid var(--line-2);
+}
+.viewbar-label { flex:none; color:var(--text-3); font-size:11.5px; font-weight:700; letter-spacing:.05em; }
+.chips { display:flex; gap:6px; overflow-x:auto; padding:2px 0; scrollbar-width:thin; }
+.chip, .chip-btn {
+  flex:none; cursor:pointer; white-space:nowrap; min-height:30px; padding:3px 11px;
+  border:1px solid var(--line); border-radius:999px; background:var(--panel); color:var(--text-3); font-size:12px;
+}
+.chip[aria-pressed="true"] { background:var(--info-bg); color:var(--text-1); border-color:var(--accent); font-weight:700; }
+.chip[aria-pressed="true"]::before { content:"✓ "; color:var(--accent); }
+.chip-btn { border-radius:6px; color:var(--text-2); }
+.viewbar-actions { display:flex; gap:6px; margin-left:auto; flex:none; }
+
+.panel-head { cursor:pointer; user-select:none; }
+.panel-head:hover { background:color-mix(in srgb, var(--panel-2) 80%, var(--line-2)); }
+.panel-toggle {
+  width:24px; height:24px; margin-left:8px; padding:0; flex:none; cursor:pointer;
+  border:1px solid var(--line); border-radius:5px; background:var(--panel); color:var(--text-2); line-height:1;
+}
+.panel-toggle::before { content:"▾"; display:inline-block; transition:transform .15s; }
+.panel.collapsed .panel-toggle::before { transform:rotate(-90deg); }
+.panel.collapsed > :not(.panel-head) { display:none !important; }
+.panel.collapsed .panel-head { border-bottom:none; }
+.panel-head .panel-hint { margin-left:auto; }
+
+/* 行政區：頁首下方、橫向捲動（不增加頁面高度） */
+.district-panel { margin:10px 16px 0; }
+.district-grid { display:flex; gap:8px; overflow-x:auto; padding:10px 12px; scroll-snap-type:x proximity; scrollbar-width:thin; }
+.district-card { flex:0 0 200px; scroll-snap-align:start; }
+
+/* 警戒輪播 */
+.wc { padding:10px 12px 12px; }
+.wc-card { display:flex; gap:10px; padding:10px; border:1px solid var(--line-2); border-radius:6px; background:var(--bg-1); min-height:78px; animation:wcFade .35s ease; }
+.wc-card.warning-danger { background:var(--danger-bg); border-color:var(--danger-line); }
+.wc-card .warning-title { font-size:13.5px; }
+.wc-card .warning-desc { font-size:11.5px; margin-top:3px; }
+.wc-ctl { display:flex; align-items:center; gap:6px; margin-top:8px; }
+.wc-btn { min-width:28px; height:26px; padding:0 6px; cursor:pointer; border:1px solid var(--line); border-radius:5px; background:var(--panel); color:var(--text-2); font-size:12px; }
+.wc-count { color:var(--text-3); font-size:11.5px; font-variant-numeric:tabular-nums; }
+.wc-dots { display:flex; gap:4px; margin-left:auto; flex-wrap:wrap; justify-content:flex-end; max-width:120px; }
+.wc-dot { width:7px; height:7px; border-radius:50%; background:var(--line); border:0; padding:0; cursor:pointer; }
+.wc-dot.on { background:var(--accent); }
+.wc-dot.danger { background:var(--danger); opacity:.45; }
+.wc-dot.danger.on { opacity:1; }
+.wc-all { max-height:300px; overflow:auto; padding:6px 12px; }
+@keyframes wcFade { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion: reduce) { .wc-card { animation:none; } .panel-toggle::before { transition:none; } }
+
+@media (max-width:820px) {
+  .viewbar { padding:6px 10px; flex-wrap:wrap; }
+  .viewbar-actions { margin-left:0; }
+  .district-panel { margin:8px 10px 0; }
+}
+@media (max-width:520px) {
+  .district-card { flex-basis:165px; }
+  .viewbar-label { display:none; }
+}
+.map-panel .panel-head { cursor:default; }
+.map-panel .panel-head:hover { background:var(--panel-2); }
