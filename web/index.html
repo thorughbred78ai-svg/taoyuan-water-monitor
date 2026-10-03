@@ -10,13 +10,18 @@
 </head>
 <body>
 <header>
-  <h1>桃園市即時水情監測</h1>
-  <div id="updated">載入中...</div>
-  <div class="controls">
-    <label for="hour">淹水範圍：</label>
-    <select id="hour" disabled>
-      <option value="0">目前即時</option>
-    </select>
+  <div class="hdr-row">
+    <h1>桃園市即時水情監測</h1>
+    <div class="hdr-controls">
+      <div id="updated">載入中...</div>
+      <label>累積雨量延時
+        <select id="rain-hours" disabled><option>1 小時</option></select>
+      </label>
+      <label>淹水範圍
+        <select id="hour" disabled><option>目前即時</option></select>
+      </label>
+    </div>
+    <div id="clock" title="臺灣目前時間"></div>
   </div>
   <div id="notice" hidden></div>
 </header>
