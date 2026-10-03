@@ -8,7 +8,7 @@ from typing import Any
 from concurrent.futures import ThreadPoolExecutor
 
 from config import (
-    CWA_API_KEY, CWA_COUNTY,
+    CWA_API_KEY, CWA_COUNTY, ROAD_SENSOR_ALERT_HEIGHT,
     BOUNDARY_FILE, INUNDATION_HOURS, INUNDATION_PARAMS, INUNDATION_URL, LATEST_DIR,
     PRECIPITATION_URL, RAINFALL_ALERT_HOURS, RAINFALL_ALERT_MM, RAINFALL_HOURS,
     RAINFALL_WORKERS, RAW_DIR,
@@ -18,6 +18,7 @@ from raster_processor import (
 )
 from cwa_client import CWAError, fetch_rain_stations, redact
 from spatial import load_districts
+from road_sensors import fetch_road_sensors, parse_road_sensors
 from stations import parse_stations
 from utils import save_json
 from wra_client import WRAClient
@@ -114,6 +115,16 @@ def fetch_stations_data() -> dict[str, Any]:
         return {"enabled": False, "reason": msg[:300], "stations": []}
 
 
+def fetch_road_data(districts) -> dict[str, Any]:
+    """Taoyuan road flood sensors (non-critical)."""
+    try:
+        return parse_road_sensors(fetch_road_sensors(), districts, ROAD_SENSOR_ALERT_HEIGHT)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Road sensors failed (non-critical): %s", exc)
+        return {"enabled": False, "reason": str(exc)[:300], "alert_height": ROAD_SENSOR_ALERT_HEIGHT,
+                "sensors": []}
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     LATEST_DIR.mkdir(parents=True, exist_ok=True)
@@ -163,6 +174,14 @@ def main() -> int:
     status["stations"] = {k: st_data.get(k) for k in
                           ("enabled", "reason", "station_count", "latest_obs_time",
                            "negative_code_values", "unrecognized_elements")}
+
+    # ---- Road flood sensors (non-critical) ----
+    road = fetch_road_data(districts)
+    road["updated_at"] = now_iso()
+    save_json(LATEST_DIR / "road_sensors.json", road)
+    status["road_sensors"] = {k: road.get(k) for k in
+                              ("enabled", "reason", "count", "alert_count", "null_height",
+                               "skipped_invalid", "latest_data_time")}
 
     # ---- Public payload (僅公開水文彙整值，不含個資) ----
     # 觀察：TimeStamp 約比執行時間早「累積小時數 + 約 2 小時」，推論為統計區間「起點」
