@@ -77,7 +77,7 @@ jobs:
           cp -r web/. _site/
           cp data/boundary/taoyuan_districts.geojson _site/data/
           cp data/latest/district_status.json _site/data/
-          cp data/latest/inundation.geojson _site/data/ 2>/dev/null || true
+          cp data/latest/inundation_h*.geojson _site/data/ 2>/dev/null || true
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
