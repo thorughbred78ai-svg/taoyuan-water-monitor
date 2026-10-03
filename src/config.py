@@ -65,4 +65,11 @@ RAINFALL_LEGEND = bool(RAINFALL_CLASSES)
 # 圖例最低級為灰色「<1 mm」；WRA PNG 中沒有出現灰色像素、無雨處為透明。
 # True：該區完全沒有有色像素時，視為 "<1 mm"（推論，輸出會標示 dry_inferred）。
 DRY_IF_TRANSPARENT = True
+
+# 雨量警示：僅針對「指定延時」(預設 1 小時) 檢查是否超過門檻 (預設 60 mm)。
+# 雨量以級距表示，故分兩級：
+#   high     = 級距下限 >= 門檻（確定超過，例：70–90）
+#   possible = 門檻落在級距內部（可能超過，例：50–70 含 60）
+RAINFALL_ALERT_HOURS = 1
+RAINFALL_ALERT_MM = 60.0
 COLOR_TOLERANCE = 12  # RGB 曼哈頓距離容許值
