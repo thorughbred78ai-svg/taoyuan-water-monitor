@@ -49,9 +49,14 @@ function fmt(value, unit) {
     return value === null || value === undefined ? "-" : `${value} ${unit}`;
 }
 
+function rainOf(d, h = selectedRain) {
+    return d?.rainfall?.[String(h)] ?? null;
+}
+
 function rainText(d) {
-    if (!d || d.rainfall_range === null || d.rainfall_range === undefined) return "-";
-    return `${d.rainfall_range} mm${d.rainfall_dry_inferred ? "（無雨推論）" : ""}`;
+    const r = rainOf(d);
+    if (!r || r.range === null || r.range === undefined) return "-";
+    return `${r.range} mm${r.dry ? "（無雨推論）" : ""}`;
 }
 
 function taipeiTime(iso) {
@@ -78,7 +83,8 @@ function districtName(props) {
 let status = null;
 let statusMap = {};
 let hourInfo = {};
-let selectedHour = 0;
+let selectedHour = 0;      // 淹水 forecastHours 0~6
+let selectedRain = 1;      // 累積雨量延時 1~24
 let districtLayer = null;
 const floodLayer = L.layerGroup().addTo(map);
 const markerLayer = L.layerGroup().addTo(map);
@@ -112,7 +118,7 @@ function hideNotice() {
 function popupHtml(name) {
     const d = statusMap[name];
     const f = floodOf(d);
-    const hours = status.cumulative_hours ?? 1;
+    const hours = selectedRain;
     return `<strong>${esc(name)}</strong>` +
         `${isFlooded(d) ? ' <span class="flood-badge">⚠ 有淹水</span>' : ""}<br>` +
         `${hours} 小時累積雨量（區內最高級距）：${esc(rainText(d))}<br>` +
@@ -126,7 +132,7 @@ function styleFor(feature) {
         color: flooded ? "#d00000" : "#444",
         weight: flooded ? 4 : 1,
         dashArray: flooded ? "6 4" : null,
-        fillColor: rainfallColor(d?.rainfall_mm),
+        fillColor: rainfallColor(rainOf(d)?.mm),
         fillOpacity: 0.55
     };
 }
@@ -173,11 +179,14 @@ function renderMarkers() {
 
 function renderNotice() {
     const info = hourInfo[String(selectedHour)];
-    const dataTime = status.data_time || status.updated_at;
+    const rinfo = status.rainfall_hours?.[String(selectedRain)];
+    const dataTime = rinfo?.window_end || status.updated_at;
     const ageH = (Date.now() - new Date(dataTime).getTime()) / 3.6e6;
     const flooded = status.districts.filter(d => isFlooded(d));
 
-    if (info && !info.available) {
+    if (rinfo && !rinfo.available) {
+        showNotice(`${selectedRain} 小時累積雨量：目前無資料，請改選其他延時。`);
+    } else if (info && !info.available) {
         showNotice(`${hourLabel(selectedHour)}：目前無可用的淹水範圍資料，並不代表沒有淹水。`);
     } else if (flooded.length) {
         const text = flooded.map(d => `${d.name} ${floodOf(d).area_km2} km²`).join("、");
@@ -198,12 +207,12 @@ function renderNotice() {
 
 function renderDistrictList() {
     const container = document.getElementById("district-list");
-    const hours = status.cumulative_hours ?? 1;
+    const hours = selectedRain;
     container.innerHTML = "";
     [...status.districts]
         .sort((a, b) =>
             (isFlooded(b) - isFlooded(a)) ||
-            ((b.rainfall_mm ?? -1) - (a.rainfall_mm ?? -1)))
+            ((rainOf(b)?.mm ?? -1) - (rainOf(a)?.mm ?? -1)))
         .forEach(d => {
             const el = document.createElement("div");
             el.className = "district" + (isFlooded(d) ? " flooded" : "");
@@ -224,22 +233,44 @@ async function renderHour() {
     await renderFlood();
 }
 
+// 雨量級距色帶（圖面型式：色塊由上而下為高→低，刻度標在色塊交界）
+const LEGEND_BLOCKS = [
+    "#fed5fd", "#ff38fb", "#dc2dd2", "#aa21a3", "#aa1800", "#d92203", "#ff2b06", "#ffa71f",
+    "#fed428", "#fefd31", "#01fa30", "#27a41c", "#0177fd", "#00a5fe", "#01d2fd", "#9dfdfe", "#cacaca"
+];
+const LEGEND_TICKS = [300, 200, 150, 130, 110, 90, 70, 50, 40, 30, 20, 15, 10, 6, 2, 1];
+
 function addLegend() {
     const legend = L.control({ position: "bottomleft" });
     legend.onAdd = () => {
-        const div = L.DomUtil.create("div", "legend");
-        const rows = SCALE.map(s =>
-            `<span class="row"><span class="sw" style="background:${s.c}"></span>${esc(s.label)}</span>`
-        ).join(" ");
+        const div = L.DomUtil.create("div", "legend rain-legend");
         div.innerHTML =
-            `<strong>區內最高雨量級距 (mm)</strong><br>${rows}<br>` +
-            `<i></i>淹水範圍／有淹水之行政區`;
+            `<div class="rl-title">區內最高雨量級距<br>毫米(mm)</div>` +
+            `<div class="rl-body">` +
+              `<div class="rl-labels">` +
+                LEGEND_TICKS.map((t, i) => `<span style="top:calc(var(--bh) * ${i + 1})">${t}</span>`).join("") +
+              `</div>` +
+              `<div class="rl-bar">` +
+                LEGEND_BLOCKS.map(c => `<div style="background:${c}"></div>`).join("") +
+              `</div>` +
+            `</div>` +
+            `<div class="rl-note">30–50 級距於本系統合併判讀（地圖以 30–40 色表示）</div>` +
+            `<div style="margin-top:6px"><i></i>淹水範圍／有淹水之行政區</div>`;
         return div;
     };
     legend.addTo(map);
 }
 
-function setupHourSelect() {
+function updateWindowText() {
+    const updated = document.getElementById("updated");
+    const r = status.rainfall_hours?.[String(selectedRain)];
+    updated.textContent = r?.available && r.window_start && r.window_end
+        ? `雨量統計區間：${taipeiTime(r.window_start)} ～ ${taipeiTime(r.window_end)}`
+        : `雨量統計區間：-`;
+}
+
+function setupSelects() {
+    // 淹水 0~6
     const sel = document.getElementById("hour");
     sel.innerHTML = "";
     for (let h = 0; h <= 6; h++) {
@@ -256,9 +287,41 @@ function setupHourSelect() {
         selectedHour = Number(sel.value);
         renderHour();
     });
+
+    // 雨量延時 1~24
+    const rs = document.getElementById("rain-hours");
+    rs.innerHTML = "";
+    for (let h = 1; h <= 24; h++) {
+        const info = status.rainfall_hours?.[String(h)];
+        const opt = document.createElement("option");
+        opt.value = String(h);
+        opt.textContent = `${h} 小時` + (info && !info.available ? "（無資料）" : "");
+        rs.appendChild(opt);
+    }
+    rs.disabled = false;
+    rs.value = String(selectedRain);
+    rs.addEventListener("change", () => {
+        selectedRain = Number(rs.value);
+        updateWindowText();
+        renderHour();
+    });
+}
+
+function startClock() {
+    const el = document.getElementById("clock");
+    const tick = () => {
+        el.textContent = new Date().toLocaleString("zh-TW", {
+            timeZone: "Asia/Taipei", hour12: false,
+            year: "numeric", month: "2-digit", day: "2-digit",
+            hour: "2-digit", minute: "2-digit", second: "2-digit"
+        }) + " (臺灣)";
+    };
+    tick();
+    setInterval(tick, 1000);
 }
 
 async function main() {
+    startClock();
     const updated = document.getElementById("updated");
     try {
         const [boundary, st] = await Promise.all([
@@ -268,6 +331,7 @@ async function main() {
         status = st;
         statusMap = Object.fromEntries(st.districts.map(d => [d.name, d]));
         hourInfo = st.inundation_hours ?? {};
+        selectedRain = st.default_rainfall_hours ?? 1;
 
         districtLayer = L.geoJSON(boundary, {
             style: styleFor,
@@ -278,13 +342,8 @@ async function main() {
         map.fitBounds(districtLayer.getBounds(), { padding: [20, 20] });
 
         addLegend();
-        setupHourSelect();
-
-        const dataTime = st.data_time || st.updated_at;
-        updated.textContent = st.window_start && st.window_end
-            ? `雨量統計區間：${taipeiTime(st.window_start)} ～ ${taipeiTime(st.window_end)}（臺北時間）`
-            : `資料時間：${taipeiTime(dataTime)}（臺北時間）`;
-
+        setupSelects();
+        updateWindowText();
         await renderHour();
     } catch (error) {
         console.error(error);
