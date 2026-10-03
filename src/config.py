@@ -37,6 +37,12 @@ CWA_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0002-001"
 CWA_API_KEY = os.getenv("CWA_API_KEY", "").strip()
 CWA_COUNTY = "桃園市"
 
+# 桃園市政府資料開放平台：路面淹水感測器即時資訊（無需授權碼）
+ROAD_SENSOR_URL = ("https://opendata.tycg.gov.tw/api/v1/dataset.api_access"
+                   "?rid=b57a725d-1ac5-41ff-9256-bfda414092df&format=json")
+# height 超過此值即在地圖示警（使用者指定；來源資料未標示單位，請對照資料集說明）
+ROAD_SENSOR_ALERT_HEIGHT = float(os.getenv("ROAD_SENSOR_ALERT_HEIGHT", "15"))
+
 HTTP_TIMEOUT = (10, 60)  # (connect, read) seconds
 HTTP_RETRIES = 3
 USER_AGENT = "Taoyuan-Water-Monitor/1.1 (GitHub Actions)"
