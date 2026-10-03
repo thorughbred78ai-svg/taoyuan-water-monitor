@@ -136,7 +136,8 @@ def color_histogram(rgba: np.ndarray, inside: np.ndarray, top: int = 30) -> list
     ]
 
 
-def process_rainfall(png: bytes, metadata: dict | None, districts) -> dict[str, Any]:
+def process_rainfall(png: bytes, metadata: dict | None, districts,
+                     diagnostics: bool = False) -> dict[str, Any]:
     if not is_png(png):
         raise ValueError("Rainfall response is not a PNG.")
     rgba = read_rgba(png)
@@ -160,24 +161,25 @@ def process_rainfall(png: bytes, metadata: dict | None, districts) -> dict[str, 
         elif n_colored == 0 and DRY_IF_TRANSPARENT:
             entry.update(max_mm=0.0, max_range="<1", dry_inferred=True)
         stats[name] = entry
-    any_inside = np.logical_or.reduce(list(masks.values()))
-    everywhere = np.ones(rgba.shape[:2], dtype=bool)
-    return {
+
+    out: dict[str, Any] = {
         "legend_configured": bool(RAINFALL_CLASSES),
-        "raster": {
+        "districts": stats,
+    }
+    if diagnostics:
+        any_inside = np.logical_or.reduce(list(masks.values()))
+        out["raster"] = {
             "width": int(rgba.shape[1]),
             "height": int(rgba.shape[0]),
             **png_info(png),
             "colored_pixels_all_taiwan": int(colored.sum()),
             "colored_pixels_taoyuan": int((any_inside & colored).sum()),
             "alpha_values": [int(v) for v in np.unique(rgba[..., 3])[:10]],
-        },
-        "districts": stats,
-        # 桃園範圍內的顏色（無降雨時為空）
-        "color_histogram": color_histogram(rgba, any_inside),
-        # 全臺有顏色的像素（有降雨時才有內容；用來取得色階）
-        "color_histogram_all_taiwan": color_histogram(rgba, everywhere),
-    }
+        }
+        out["color_histogram"] = color_histogram(rgba, any_inside)
+        out["color_histogram_all_taiwan"] = color_histogram(
+            rgba, np.ones(rgba.shape[:2], dtype=bool))
+    return out
 
 
 _TO_WGS84 = Transformer.from_crs(TWD97_TM2, WGS84, always_xy=True)
