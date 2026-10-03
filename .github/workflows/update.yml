@@ -2,12 +2,9 @@ name: Update & Deploy Taoyuan Water Monitor
 
 on:
   workflow_dispatch:
-    inputs:
-      rainfall_hours:
-        description: "累積雨量小時數 (1~24)；取色階時可填 24 以提高出現降雨像素的機率"
-        default: "1"
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "*/30 * * * *"                           # 完整更新（WRA 雨量/淹水 + 測站 + 感測器）
+    - cron: "5,10,15,20,25,35,40,45,50,55 * * * *"   # 快速更新（僅氣象署測站 + 路面淹水感測器）
   push:
     branches: [main]
     paths:
@@ -17,8 +14,8 @@ on:
       - "requirements.txt"
       - ".github/workflows/update.yml"
 
-# 單一工作流程：產生資料 -> 直接部署 Pages（不再 commit 資料回 main，
-# 避免 GITHUB_TOKEN 推送不會觸發其他 workflow、以及 repo 因每 30 分鐘 commit 而膨脹）
+# 單一工作流程：產生資料 -> 直接部署 Pages（不再 commit 資料回 main）。
+# 注意：GitHub 排程為「盡力而為」，高負載時可能延遲數分鐘，5 分鐘的快速更新不保證準時。
 concurrency:
   group: taoyuan-water
   cancel-in-progress: false
@@ -29,6 +26,9 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+    env:
+      # 只有「快速排程」才是 fast；push / 手動 / 30 分鐘排程皆為完整更新
+      ETL_MODE: ${{ (github.event_name == 'schedule' && github.event.schedule != '*/30 * * * *') && 'fast' || 'full' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -43,27 +43,52 @@ jobs:
       - name: Validate source
         run: python -m py_compile src/*.py
 
-      - name: Clean stale outputs
+      # 快速更新：還原最近一次「完整更新」的結果（WRA 雨量網格/淹水），再只更新測站與感測器
+      - name: Restore last full data (fast mode)
+        if: env.ETL_MODE == 'fast'
+        uses: actions/cache/restore@v4
+        with:
+          path: data/latest
+          key: latest-data-none
+          restore-keys: latest-data-
+
+      - name: Clean stale outputs (full mode)
+        if: env.ETL_MODE == 'full'
         run: rm -rf data/latest
 
-      - name: Fetch WRA data and compute district statistics
+      - name: Fetch data
         env:
-          # 於 Settings → Variables 設定（非機密）；未設定則為空
-          INUNDATION_PARAMS: ${{ vars.INUNDATION_PARAMS }}
-          CWA_API_KEY: ${{ secrets.CWA_API_KEY }}   # 氣象署授權碼（Repository secret，可留空）
-          RAINFALL_CUMULATIVE_HOURS: ${{ inputs.rainfall_hours || '1' }}
+          INUNDATION_PARAMS: ${{ vars.INUNDATION_PARAMS }}   # 非機密，可留空
+          CWA_API_KEY: ${{ secrets.CWA_API_KEY }}            # 氣象署授權碼（Repository secret，可留空）
         run: python src/main.py
+
+      - name: Detect effective mode
+        id: emode
+        run: echo "mode=$(cat data/latest/.mode 2>/dev/null || echo none)" >> "$GITHUB_OUTPUT"
+
+      - name: Save full data to cache
+        if: steps.emode.outputs.mode == 'full'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            data/latest
+            !data/latest/raw
+          key: latest-data-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Show results (debug)
         if: always()
         run: |
-          for f in data/latest/status.json data/latest/district_status.json data/latest/rainfall_statistics.json data/latest/inundation_statistics.json; do
-            echo "----- $f -----"; cat "$f" 2>/dev/null || echo "(not found)"
+          echo "ETL_MODE=${ETL_MODE} effective=${{ steps.emode.outputs.mode }}"
+          for f in data/latest/status.json data/latest/district_status.json data/latest/inundation_statistics.json; do
+            echo "----- $f -----"; head -c 4000 "$f" 2>/dev/null || echo "(not found)"; echo
+          done
+          for f in data/latest/stations.json data/latest/road_sensors.json; do
+            echo "----- $f (head) -----"; head -c 1500 "$f" 2>/dev/null || echo "(not found)"; echo
           done
           find data/latest/raw -name '*.error.txt' -exec sh -c 'echo "--- $1 ---"; head -c 3000 "$1"' _ {} \; 2>/dev/null || true
 
-      - name: Upload diagnostics artifact
-        if: always()
+      - name: Upload diagnostics artifact (full mode)
+        if: always() && env.ETL_MODE == 'full'
         uses: actions/upload-artifact@v4
         with:
           name: latest-data
