@@ -5,20 +5,54 @@ import sys
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from concurrent.futures import ThreadPoolExecutor
+
 from config import (
     BOUNDARY_FILE, INUNDATION_HOURS, INUNDATION_PARAMS, INUNDATION_URL, LATEST_DIR,
-    PRECIPITATION_URL, RAINFALL_CUMULATIVE_HOURS, RAINFALL_HOURS_FALLBACK, RAW_DIR,
+    PRECIPITATION_URL, RAINFALL_HOURS, RAINFALL_WORKERS, RAW_DIR,
 )
 from raster_processor import inundation_geojson, process_inundation, process_rainfall
 from spatial import load_districts
 from utils import save_json
-from wra_client import WRAClient, WRAError
+from wra_client import WRAClient
 
 log = logging.getLogger("main")
 
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def fetch_rainfall(client: WRAClient, districts) -> dict[int, dict[str, Any]]:
+    """Download cumulativeHours 1..24 concurrently, then process sequentially."""
+    def download(h: int) -> tuple[int, dict[str, Any]]:
+        try:
+            r = client.get(PRECIPITATION_URL, RAW_DIR / f"rainfall_h{h:02d}.bin",
+                           {"cumulativeHours": h})
+            return h, {"download": r}
+        except Exception as exc:  # noqa: BLE001
+            return h, {"reason": str(exc)[:300]}
+
+    with ThreadPoolExecutor(max_workers=RAINFALL_WORKERS) as ex:
+        downloaded = dict(ex.map(download, RAINFALL_HOURS))
+
+    result: dict[int, dict[str, Any]] = {}
+    for h in RAINFALL_HOURS:  # masks cache 非 thread-safe，故處理階段循序執行
+        d = downloaded[h]
+        if "download" not in d:
+            log.warning("rainfall h%s download failed: %s", h, d["reason"])
+            result[h] = {"ok": False, "reason": d["reason"]}
+            continue
+        try:
+            body = (RAW_DIR / f"rainfall_h{h:02d}.bin").read_bytes()
+            meta = d["download"]["metadata"]
+            stats = process_rainfall(body, meta, districts, diagnostics=(h == 1))
+            result[h] = {"ok": True, "stats": stats, "timestamp": (meta or {}).get("TimeStamp")}
+        except Exception as exc:  # noqa: BLE001
+            log.warning("rainfall h%s processing failed: %s", h, exc)
+            result[h] = {"ok": False, "reason": str(exc)[:300]}
+    log.info("rainfall ok hours: %s", [h for h, e in result.items() if e["ok"]])
+    return result
 
 
 def fetch_inundation(client: WRAClient, districts) -> dict[int, dict[str, Any]]:
@@ -60,10 +94,6 @@ def main() -> int:
     status: dict[str, Any] = {"updated_at": now_iso(), "city": "桃園市", "ok": False}
     status_file = LATEST_DIR / "status.json"
 
-    if not 1 <= RAINFALL_CUMULATIVE_HOURS <= 24:
-        log.error("RAINFALL_CUMULATIVE_HOURS must be 1..24")
-        return 1
-
     try:
         districts = load_districts(BOUNDARY_FILE)
     except Exception as exc:
@@ -74,83 +104,81 @@ def main() -> int:
 
     client = WRAClient()
 
-    # ---- Rainfall (critical) ----
-    candidates = [RAINFALL_CUMULATIVE_HOURS] + [
-        h for h in RAINFALL_HOURS_FALLBACK if h != RAINFALL_CUMULATIVE_HOURS
-    ]
-    rf_file = RAW_DIR / "rainfall.bin"
-    rf, used_hours, attempts = None, None, []
-    for hours in candidates:
-        try:
-            rf = client.get(PRECIPITATION_URL, rf_file, {"cumulativeHours": hours})
-            used_hours = hours
-            break
-        except WRAError as exc:
-            attempts.append({"cumulativeHours": hours, "error": str(exc)[:300]})
-            log.warning("cumulativeHours=%s rejected: %s", hours, str(exc)[:200])
-            if "HTTP 400" not in str(exc):
-                break
-    status["rainfall_attempts"] = attempts
-    if rf is None:
-        status["error"] = "rainfall: all attempts failed"
+    # ---- Rainfall 1..24h (至少一個延時成功才算成功) ----
+    rain = fetch_rainfall(client, districts)
+    ok_hours = sorted(h for h, e in rain.items() if e.get("ok"))
+    status["rainfall"] = {
+        "available_hours": ok_hours,
+        "failed": {str(h): e.get("reason") for h, e in rain.items() if not e.get("ok")},
+    }
+    if not ok_hours:
+        status["error"] = "rainfall: all cumulativeHours failed"
         save_json(status_file, status)
         return 1  # 不產生新資料 -> 部署被跳過 -> 網站保留上一版
-
-    try:
-        rain = process_rainfall(rf_file.read_bytes(), rf["metadata"], districts)
-        save_json(LATEST_DIR / "rainfall_statistics.json", rain)
-        status["rainfall"] = {
-            "cumulative_hours": used_hours,
-            **{k: rf[k] for k in ("status_code", "content_type", "metadata")},
+    default_hour = ok_hours[0]
+    save_json(LATEST_DIR / "rainfall_statistics.json", {
+        "hours": {
+            str(h): (rain[h]["stats"] if h == default_hour else
+                     {"max_range": {n: v["max_range"] for n, v in rain[h]["stats"]["districts"].items()}})
+            for h in ok_hours
         }
-    except Exception as exc:
-        log.exception("Rainfall processing failed")
-        status["error"] = f"rainfall processing: {exc}"
-        save_json(status_file, status)
-        return 1
+    })
 
     # ---- Inundation 0..6h (non-critical) ----
     inun = fetch_inundation(client, districts)
     save_json(LATEST_DIR / "inundation_statistics.json", {"hours": {str(h): v for h, v in inun.items()}})
 
     # ---- Public payload (僅公開水文彙整值，不含個資) ----
+    # 觀察：TimeStamp 約比執行時間早「累積小時數 + 約 2 小時」，推論為統計區間「起點」
+    # （1h 與 24h 資料皆符合）；尚未由 WRA 文件證實。
+    rain_hours_info: dict[str, Any] = {}
+    for h in RAINFALL_HOURS:
+        e = rain[h]
+        info: dict[str, Any] = {"available": bool(e.get("ok"))}
+        if e.get("ok"):
+            ts = e.get("timestamp")
+            info["window_start"] = ts
+            try:
+                info["window_end"] = (datetime.fromisoformat(ts) + timedelta(hours=h)).isoformat()
+            except (TypeError, ValueError):
+                info["window_end"] = None
+        else:
+            info["message"] = e.get("reason")
+        rain_hours_info[str(h)] = info
+
     rows = []
     for name in districts["name"]:
-        r = rain["districts"].get(name, {})
+        rf_by_hour: dict[str, Any] = {}
+        for h in ok_hours:
+            r = rain[h]["stats"]["districts"].get(name, {})
+            rf_by_hour[str(h)] = {
+                "mm": r.get("max_mm"), "range": r.get("max_range"),
+                "dry": r.get("dry_inferred", False), "coverage": r.get("coverage_pct"),
+            }
         per_hour: dict[str, Any] = {}
         for h, e in inun.items():
             if e.get("available"):
                 d = e.get("districts", {}).get(name, {})
                 per_hour[str(h)] = {"area_km2": d.get("area_km2"), "center": d.get("center")}
         now_ = per_hour.get("0", {})
+        dflt = rf_by_hour.get(str(default_hour), {})
         rows.append({
             "name": name,
-            "rainfall_mm": r.get("max_mm"),
-            "rainfall_range": r.get("max_range"),
-            "rainfall_dry_inferred": r.get("dry_inferred", False),
-            "rainfall_coverage_pct": r.get("coverage_pct"),
-            "inundation_area_km2": now_.get("area_km2"),       # 相容舊欄位 = 目前即時 (h0)
+            "rainfall": rf_by_hour,                           # {"1": {...}, ..., "24": {...}}
+            "rainfall_mm": dflt.get("mm"),                    # 相容舊欄位 = 預設延時
+            "rainfall_range": dflt.get("range"),
+            "rainfall_dry_inferred": dflt.get("dry", False),
+            "inundation_area_km2": now_.get("area_km2"),      # 相容舊欄位 = 目前即時 (h0)
             "inundation_center": now_.get("center"),
-            "inundation": per_hour,                            # {"0": {...}, "1": {...}, ...}
+            "inundation": per_hour,                           # {"0": {...}, ..., "6": {...}}
         })
-
-    # 觀察：TimeStamp 約比執行時間早「累積小時數 + 約 2 小時」，推論為統計區間「起點」
-    # （1h 與 24h 資料皆符合）；尚未由 WRA 文件證實。
-    window_start = (rf["metadata"] or {}).get("TimeStamp")
-    window_end = None
-    try:
-        window_end = (datetime.fromisoformat(window_start) + timedelta(hours=used_hours)).isoformat()
-    except (TypeError, ValueError):
-        pass
 
     save_json(LATEST_DIR / "district_status.json", {
         "updated_at": status["updated_at"],
-        "window_start": window_start,
-        "window_end": window_end,
-        "data_time": window_end or window_start,
         "city": "桃園市",
-        "cumulative_hours": used_hours,
-        "rainfall_legend_configured": rain["legend_configured"],
+        "default_rainfall_hours": default_hour,
+        "rainfall_hours": rain_hours_info,
+        "rainfall_legend_configured": rain[default_hour]["stats"]["legend_configured"],
         "inundation_hours": {
             str(h): {
                 "available": bool(e.get("available")),
