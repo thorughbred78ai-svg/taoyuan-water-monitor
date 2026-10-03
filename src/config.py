@@ -30,6 +30,13 @@ INUNDATION_PARAMS: dict = json.loads(os.getenv("INUNDATION_PARAMS") or '{"region
 INUNDATION_PARAMS.pop("forecastHours", None)
 INUNDATION_HOURS: tuple[int, ...] = tuple(range(0, 7))
 
+# 中央氣象署開放資料：O-A0002-001 雨量觀測站－雨量資料
+# 授權碼放在 GitHub Repository secret `CWA_API_KEY`（Settings → Secrets and variables → Actions）；
+# 未設定時測站功能自動停用，不影響 WRA 雨量/淹水。
+CWA_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0002-001"
+CWA_API_KEY = os.getenv("CWA_API_KEY", "").strip()
+CWA_COUNTY = "桃園市"
+
 HTTP_TIMEOUT = (10, 60)  # (connect, read) seconds
 HTTP_RETRIES = 3
 USER_AGENT = "Taoyuan-Water-Monitor/1.1 (GitHub Actions)"
