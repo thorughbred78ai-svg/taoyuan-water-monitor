@@ -1,3 +1,4 @@
+
 const map = L.map("map").setView([24.9937, 121.3010], 10);
 
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -8,7 +9,7 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 map.createPane("flood");
 map.getPane("flood").style.zIndex = 450;
 
-const STALE_HOURS = 3;
+const STALE_HOURS = 4; // WRA 資料本身約延遲 2 小時
 
 function rainfallColor(mm) {
     if (mm === null || mm === undefined) return "#eeeeee";
