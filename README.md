@@ -9,7 +9,10 @@
 - `src/` ETL：`config` / `wra_client` / `cwa_client` / `stations` / `spatial` / `raster_processor` / `main`
 - `data/boundary/taoyuan_districts.geojson` 行政區界（13 區）
 - `web/` 前端（`index.html` + `style.css` + `app.js`）
-- `.github/workflows/update.yml` 每 30 分鐘更新並直接部署（失敗則保留上一版）
+- `.github/workflows/update.yml` 兩段排程並直接部署（失敗則保留上一版）：
+  - 每 30 分鐘 **完整更新**（WRA 雨量 1~24h／淹水 0~6h ＋ 測站 ＋ 路面感測器）
+  - 其餘每 5 分鐘 **快速更新**（僅氣象署測站 ＋ 路面淹水感測器；沿用最近一次完整更新的快取）
+  - GitHub 排程為盡力而為，可能延遲；網頁「更新週期」(5/10/30/60 分鐘，預設 30) 只決定瀏覽器多久重新讀取一次
 
 ## 啟用步驟
 1. Settings → Pages → Source 選 **GitHub Actions**。
@@ -20,7 +23,7 @@
 4. 手動執行一次 workflow（Actions → Run workflow）。
 
 ## 輸出（部署到網站 `data/`）
-`district_status.json`、`stations.json`、`rainfall_h1~24.geojson`、`inundation_h0~6.geojson`、`taoyuan_districts.geojson`
+`district_status.json`、`stations.json`、`road_sensors.json`、`rainfall_h1~24.geojson`、`inundation_h0~6.geojson`、`taoyuan_districts.geojson`
 
 ## 本機
 ```bash
