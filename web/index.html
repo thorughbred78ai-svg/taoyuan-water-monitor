@@ -46,10 +46,27 @@
   <div id="alerts" role="status" aria-live="polite"></div>
 </div>
 
+<nav class="viewbar" id="viewbar" aria-label="選擇要顯示的資訊區塊">
+  <span class="viewbar-label">顯示區塊</span>
+  <div class="chips" id="chips"></div>
+  <div class="viewbar-actions">
+    <button type="button" class="chip-btn" id="expandAll">全部展開</button>
+    <button type="button" class="chip-btn" id="collapseAll">全部收合</button>
+  </div>
+</nav>
+
+  <section class="panel district-panel" data-panel="district" data-title="行政區雨量">
+    <div class="panel-head">
+      <h2 class="panel-title">桃園市行政區雨量</h2>
+      <span class="panel-hint" id="districtHint">13 區</span>
+    </div>
+    <div class="district-grid" id="districtGrid"></div>
+  </section>
+
 <main class="dashboard">
 
   <aside class="left">
-    <section class="panel">
+    <section class="panel" data-panel="kpi" data-title="即時統計">
       <div class="panel-head">
         <h2 class="panel-title">即時統計</h2>
         <span class="panel-hint">氣象署測站 · mm</span>
@@ -66,7 +83,7 @@
       </div>
     </section>
 
-    <section class="panel">
+    <section class="panel" data-panel="rank" data-title="雨量排行">
       <div class="panel-head">
         <h2 class="panel-title">雨量排行</h2>
         <span class="panel-hint">1H</span>
@@ -86,15 +103,15 @@
   </section>
 
   <aside class="right">
-    <section class="panel">
+    <section class="panel" data-panel="warn" data-title="警戒資訊">
       <div class="panel-head">
-        <h2 class="panel-title">雨量警戒</h2>
+        <h2 class="panel-title">警戒資訊</h2>
         <span class="panel-hint">STATUS</span>
       </div>
       <div class="warning-list" id="warningList"></div>
     </section>
 
-    <section class="panel">
+    <section class="panel" data-panel="search" data-title="測站搜尋">
       <div class="panel-head"><h2 class="panel-title">測站搜尋</h2></div>
       <div class="search">
         <input id="stationSearch" type="search" placeholder="輸入測站名稱、行政區或代碼..." aria-label="搜尋測站">
@@ -102,7 +119,7 @@
       <div class="station-list" id="stationList"></div>
     </section>
 
-    <section class="panel">
+    <section class="panel" data-panel="sys" data-title="系統狀態">
       <div class="panel-head"><h2 class="panel-title">系統狀態</h2></div>
       <div class="sys" id="sysStatus"></div>
       <div class="sys sys-controls">
@@ -121,13 +138,6 @@
     </section>
   </aside>
 
-  <section class="panel district-panel">
-    <div class="panel-head">
-      <h2 class="panel-title">桃園市行政區雨量</h2>
-      <span class="panel-hint" id="districtHint">13 區</span>
-    </div>
-    <div class="district-grid" id="districtGrid"></div>
-  </section>
 
 </main>
 
