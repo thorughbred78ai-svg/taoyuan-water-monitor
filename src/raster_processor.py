@@ -8,10 +8,24 @@ import numpy as np
 from rasterio.io import MemoryFile
 from rasterio.transform import Affine, from_bounds
 
+from pyproj import Transformer
+
 from config import COLOR_TOLERANCE, DRY_IF_TRANSPARENT, RAINFALL_CLASSES, TWD97_TM2, WGS84
-from spatial import district_masks
+from spatial import district_masks as _district_masks
 
 log = logging.getLogger(__name__)
+
+_MASK_CACHE: dict = {}
+
+
+def district_masks(districts, transform, shape):
+    """Cache masks: 7 inundation hours share one grid, avoid rasterizing 7 times."""
+    key = (tuple(transform)[:6], tuple(shape), id(districts))
+    if key not in _MASK_CACHE:
+        _MASK_CACHE.clear()
+        _MASK_CACHE[key] = _district_masks(districts, transform, shape)
+    return _MASK_CACHE[key]
+
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
@@ -166,6 +180,22 @@ def process_rainfall(png: bytes, metadata: dict | None, districts) -> dict[str, 
     }
 
 
+_TO_WGS84 = Transformer.from_crs(TWD97_TM2, WGS84, always_xy=True)
+
+
+def _flood_stats(wet_in_district: np.ndarray, transform: Affine, cell_km2: float) -> dict[str, Any]:
+    rows, cols = np.nonzero(wet_in_district)
+    out: dict[str, Any] = {
+        "area_km2": round(float(rows.size) * cell_km2, 4),
+        "wet_pixels": int(rows.size),
+    }
+    if rows.size:
+        x, y = transform * (float(cols.mean()) + 0.5, float(rows.mean()) + 0.5)
+        lon, lat = _TO_WGS84.transform(x, y)
+        out["center"] = [round(lat, 5), round(lon, 5)]  # [lat, lon]
+    return out
+
+
 def process_inundation(body: bytes, metadata: dict | None, districts) -> dict[str, Any]:
     """PNG -> per-district area of non-transparent pixels (ASSUMPTION: colored = inundated)."""
     if not is_png(body):
@@ -192,13 +222,7 @@ def process_inundation(body: bytes, metadata: dict | None, districts) -> dict[st
             "alpha_values": [int(v) for v in np.unique(rgba[..., 3])[:10]],
         },
         "color_histogram": color_histogram(rgba, everywhere, top=20),
-        "districts": {
-            n: {
-                "area_km2": round(float((m & wet).sum()) * cell_km2, 4),
-                "wet_pixels": int((m & wet).sum()),
-            }
-            for n, m in masks.items()
-        },
+        "districts": {n: _flood_stats(m & wet, transform, cell_km2) for n, m in masks.items()},
     }
 
 
