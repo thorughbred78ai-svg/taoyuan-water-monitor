@@ -9,9 +9,12 @@ from concurrent.futures import ThreadPoolExecutor
 
 from config import (
     BOUNDARY_FILE, INUNDATION_HOURS, INUNDATION_PARAMS, INUNDATION_URL, LATEST_DIR,
-    PRECIPITATION_URL, RAINFALL_HOURS, RAINFALL_WORKERS, RAW_DIR,
+    PRECIPITATION_URL, RAINFALL_ALERT_HOURS, RAINFALL_ALERT_MM, RAINFALL_HOURS,
+    RAINFALL_WORKERS, RAW_DIR,
 )
-from raster_processor import inundation_geojson, process_inundation, process_rainfall
+from raster_processor import (
+    inundation_geojson, process_inundation, process_rainfall, rainfall_cells_geojson,
+)
 from spatial import load_districts
 from utils import save_json
 from wra_client import WRAClient
@@ -46,7 +49,12 @@ def fetch_rainfall(client: WRAClient, districts) -> dict[int, dict[str, Any]]:
         try:
             body = (RAW_DIR / f"rainfall_h{h:02d}.bin").read_bytes()
             meta = d["download"]["metadata"]
-            stats = process_rainfall(body, meta, districts, diagnostics=(h == 1))
+            stats = process_rainfall(
+                body, meta, districts, diagnostics=(h == 1),
+                alert_mm=RAINFALL_ALERT_MM if h == RAINFALL_ALERT_HOURS else None,
+            )
+            save_json(LATEST_DIR / f"rainfall_h{h}.geojson",
+                      rainfall_cells_geojson(body, meta, districts))
             result[h] = {"ok": True, "stats": stats, "timestamp": (meta or {}).get("TimeStamp")}
         except Exception as exc:  # noqa: BLE001
             log.warning("rainfall h%s processing failed: %s", h, exc)
@@ -154,6 +162,7 @@ def main() -> int:
             rf_by_hour[str(h)] = {
                 "mm": r.get("max_mm"), "range": r.get("max_range"),
                 "dry": r.get("dry_inferred", False), "coverage": r.get("coverage_pct"),
+                "alert": r.get("alert"),
             }
         per_hour: dict[str, Any] = {}
         for h, e in inun.items():
@@ -177,6 +186,8 @@ def main() -> int:
         "updated_at": status["updated_at"],
         "city": "桃園市",
         "default_rainfall_hours": default_hour,
+        "rainfall_alert": {"hours": RAINFALL_ALERT_HOURS, "mm": RAINFALL_ALERT_MM},
+        "rainfall_cell_size_m": rain[default_hour]["stats"].get("cell_size_m"),
         "rainfall_hours": rain_hours_info,
         "rainfall_legend_configured": rain[default_hour]["stats"]["legend_configured"],
         "inundation_hours": {
