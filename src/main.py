@@ -6,13 +6,13 @@ from datetime import datetime, timezone
 from typing import Any
 
 from config import (
-    BOUNDARY_FILE, INUNDATION_URL, LATEST_DIR, PRECIPITATION_URL,
-    RAINFALL_CUMULATIVE_HOURS, RAW_DIR,
+    BOUNDARY_FILE, INUNDATION_PARAMS, INUNDATION_URL, LATEST_DIR, PRECIPITATION_URL,
+    RAINFALL_CUMULATIVE_HOURS, RAINFALL_HOURS_FALLBACK, RAW_DIR,
 )
 from raster_processor import process_inundation, process_rainfall
 from spatial import load_districts
 from utils import save_json
-from wra_client import WRAClient
+from wra_client import WRAClient, WRAError
 
 log = logging.getLogger("main")
 
@@ -44,24 +44,50 @@ def main() -> int:
     client = WRAClient()
 
     # ---- Rainfall (critical) ----
-    try:
-        rf_file = RAW_DIR / "rainfall.bin"
-        rf = client.get(PRECIPITATION_URL, rf_file,
-                        {"cumulativeHours": RAINFALL_CUMULATIVE_HOURS})
-        rain = process_rainfall(rf_file.read_bytes(), rf["metadata"], districts)
-        save_json(LATEST_DIR / "rainfall_statistics.json", rain)
-        status["rainfall"] = {k: rf[k] for k in ("status_code", "content_type", "metadata")}
-    except Exception as exc:
-        log.exception("Rainfall failed")
-        status["error"] = f"rainfall: {exc}"
+    # 先用設定值；若 API 以 HTTP 400 拒絕參數，依序探測其他小時數並記錄實際使用值
+    candidates = [RAINFALL_CUMULATIVE_HOURS] + [
+        h for h in RAINFALL_HOURS_FALLBACK if h != RAINFALL_CUMULATIVE_HOURS
+    ]
+    rf_file = RAW_DIR / "rainfall.bin"
+    rf = None
+    used_hours = None
+    attempts: list[dict[str, Any]] = []
+    for hours in candidates:
+        try:
+            rf = client.get(PRECIPITATION_URL, rf_file, {"cumulativeHours": hours})
+            used_hours = hours
+            break
+        except WRAError as exc:
+            attempts.append({"cumulativeHours": hours, "error": str(exc)[:300]})
+            log.warning("cumulativeHours=%s rejected: %s", hours, str(exc)[:200])
+            if "HTTP 400" not in str(exc):  # 非參數錯誤（5xx/網路）不必探測
+                break
+    status["rainfall_attempts"] = attempts
+    if rf is None:
+        status["error"] = "rainfall: all attempts failed"
         save_json(status_file, status)
         return 1  # 不產生新資料 -> 部署被跳過 -> 網站保留上一版
+    if used_hours != RAINFALL_CUMULATIVE_HOURS:
+        log.warning("Using cumulativeHours=%s instead of %s", used_hours, RAINFALL_CUMULATIVE_HOURS)
+
+    try:
+        rain = process_rainfall(rf_file.read_bytes(), rf["metadata"], districts)
+        save_json(LATEST_DIR / "rainfall_statistics.json", rain)
+        status["rainfall"] = {
+            "cumulative_hours": used_hours,
+            **{k: rf[k] for k in ("status_code", "content_type", "metadata")},
+        }
+    except Exception as exc:
+        log.exception("Rainfall processing failed")
+        status["error"] = f"rainfall processing: {exc}"
+        save_json(status_file, status)
+        return 1
 
     # ---- Inundation (non-critical) ----
     inun: dict[str, Any] = {"available": False, "reason": "not fetched"}
     try:
         in_file = RAW_DIR / "inundation.bin"
-        inr = client.get(INUNDATION_URL, in_file)
+        inr = client.get(INUNDATION_URL, in_file, INUNDATION_PARAMS or None)
         inun = process_inundation(in_file.read_bytes(), inr["metadata"], districts)
         status["inundation"] = {k: inr[k] for k in ("status_code", "content_type", "content_length")}
     except Exception as exc:
@@ -80,7 +106,9 @@ def main() -> int:
         rows.append({
             "name": name,
             "rainfall_mm": r.get("max_mm"),
-            "rainfall_mean_mm": r.get("mean_mm"),
+            "rainfall_range": r.get("max_range"),
+            "rainfall_dry_inferred": r.get("dry_inferred", False),
+            "rainfall_coverage_pct": r.get("coverage_pct"),
             "inundation_area_km2": area,
         })
 
@@ -88,7 +116,7 @@ def main() -> int:
         "updated_at": status["updated_at"],
         "data_time": (rf["metadata"] or {}).get("TimeStamp"),
         "city": "桃園市",
-        "cumulative_hours": RAINFALL_CUMULATIVE_HOURS,
+        "cumulative_hours": used_hours,
         "rainfall_legend_configured": rain["legend_configured"],
         "inundation_available": bool(inun.get("available")),
         "districts": rows,
