@@ -10,6 +10,7 @@ from rasterio.transform import Affine, from_bounds
 
 from pyproj import Transformer
 
+import shapely
 from config import COLOR_TOLERANCE, DRY_IF_TRANSPARENT, RAINFALL_CLASSES, TWD97_TM2, WGS84
 from spatial import district_masks as _district_masks
 
@@ -136,8 +137,43 @@ def color_histogram(rgba: np.ndarray, inside: np.ndarray, top: int = 30) -> list
     ]
 
 
+def _pixel_center(sel: np.ndarray, transform: Affine) -> list[float]:
+    rows, cols = np.nonzero(sel)
+    x, y = transform * (float(cols.mean()) + 0.5, float(rows.mean()) + 0.5)
+    lon, lat = _TO_WGS84.transform(x, y)
+    return [round(lat, 5), round(lon, 5)]  # [lat, lon]
+
+
+def _rain_alert(cls: np.ndarray, m: np.ndarray, transform: Affine,
+                alert_mm: float) -> dict[str, Any] | None:
+    los = np.array([c[0] for c in RAINFALL_CLASSES], dtype=float)
+    his = np.array([np.inf if c[1] is None else c[1] for c in RAINFALL_CLASSES], dtype=float)
+    valid = m & (cls >= 0)
+    lo = np.where(valid, los[np.clip(cls, 0, None)], np.nan)
+    hi = np.where(valid, his[np.clip(cls, 0, None)], np.nan)
+    high = valid & (lo >= alert_mm)
+    possible = valid & (lo < alert_mm) & (hi > alert_mm)
+    if high.any():
+        level, sel = "high", high
+        top = int(cls[sel].max())
+    elif possible.any():
+        level, sel = "possible", possible
+        top = int(cls[sel].max())
+    else:
+        return None
+    cell_km2 = abs(transform.a * transform.e) / 1e6
+    return {
+        "level": level,
+        "range": range_label(RAINFALL_CLASSES[top][0], RAINFALL_CLASSES[top][1]),
+        "cells": int(sel.sum()),
+        "area_km2": round(float(sel.sum()) * cell_km2, 3),
+        "center": _pixel_center(sel, transform),
+    }
+
+
 def process_rainfall(png: bytes, metadata: dict | None, districts,
-                     diagnostics: bool = False) -> dict[str, Any]:
+                     diagnostics: bool = False,
+                     alert_mm: float | None = None) -> dict[str, Any]:
     if not is_png(png):
         raise ValueError("Rainfall response is not a PNG.")
     rgba = read_rgba(png)
@@ -160,10 +196,13 @@ def process_rainfall(png: bytes, metadata: dict | None, districts,
             entry.update(max_mm=float(lo), max_range=range_label(lo, hi))
         elif n_colored == 0 and DRY_IF_TRANSPARENT:
             entry.update(max_mm=0.0, max_range="<1", dry_inferred=True)
+        if alert_mm is not None:
+            entry["alert"] = _rain_alert(cls, m, transform, alert_mm)
         stats[name] = entry
 
     out: dict[str, Any] = {
         "legend_configured": bool(RAINFALL_CLASSES),
+        "cell_size_m": [round(abs(transform.a), 1), round(abs(transform.e), 1)],
         "districts": stats,
     }
     if diagnostics:
@@ -250,4 +289,34 @@ def inundation_geojson(body: bytes, metadata: dict | None, districts,
         for g, _ in rfeatures.shapes(wet.astype(np.uint8), mask=wet, transform=transform)
     ][:max_features]
     gdf = gpd.GeoDataFrame(geometry=geoms, crs=TWD97_TM2).to_crs(WGS84)
+    return json.loads(gdf.to_json(drop_id=True))
+
+
+def rainfall_cells_geojson(png: bytes, metadata: dict | None, districts) -> dict[str, Any]:
+    """Rainfall grid cells (same size/position as the WRA raster) as WGS84 polygons.
+
+    Adjacent cells of the same class are merged, so polygon edges follow the cell grid.
+    """
+    import geopandas as gpd
+    from rasterio import features as rfeatures
+    from shapely.geometry import shape
+
+    empty: dict[str, Any] = {"type": "FeatureCollection", "features": []}
+    if not is_png(png):
+        return empty
+    rgba = read_rgba(png)
+    transform = build_transform(metadata or {}, rgba.shape[:2])
+    masks = district_masks(districts, transform, rgba.shape[:2])
+    inside = np.logical_or.reduce(list(masks.values()))
+    cls = decode_rainfall_class(rgba)
+    valid = (cls >= 0) & inside
+    if not valid.any():
+        return empty
+    geoms, props = [], []
+    for g, v in rfeatures.shapes(cls.astype(np.int16), mask=valid, transform=transform):
+        lo, hi, _ = RAINFALL_CLASSES[int(v)]
+        geoms.append(shape(g))
+        props.append({"lo": lo, "hi": hi, "label": range_label(lo, hi)})
+    gdf = gpd.GeoDataFrame(props, geometry=geoms, crs=TWD97_TM2).to_crs(WGS84)
+    gdf["geometry"] = shapely.set_precision(gdf.geometry.values, 1e-5)  # ~1 m，縮小檔案
     return json.loads(gdf.to_json(drop_id=True))
