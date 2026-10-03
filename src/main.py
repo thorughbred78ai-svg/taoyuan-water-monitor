@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 import logging
@@ -90,10 +91,18 @@ def main() -> int:
         inr = client.get(INUNDATION_URL, in_file, INUNDATION_PARAMS or None)
         inun = process_inundation(in_file.read_bytes(), inr["metadata"], districts)
         if inun.get("available"):
-            save_json(
-                LATEST_DIR / "inundation.geojson",
-                inundation_geojson(in_file.read_bytes(), inr["metadata"], districts),
-            )
+            flood_gj = inundation_geojson(in_file.read_bytes(), inr["metadata"], districts)
+            save_json(LATEST_DIR / "inundation.geojson", flood_gj)
+            if flood_gj["features"]:
+                from shapely.geometry import shape
+                bounds = [shape(f["geometry"]).bounds for f in flood_gj["features"]]
+                inun["extent_wgs84"] = {  # [lon_min, lat_min, lon_max, lat_max]，便於與現場/感測器核對
+                    "bbox": [
+                        round(min(b[0] for b in bounds), 5), round(min(b[1] for b in bounds), 5),
+                        round(max(b[2] for b in bounds), 5), round(max(b[3] for b in bounds), 5),
+                    ],
+                    "polygon_count": len(bounds),
+                }
         status["inundation"] = {k: inr[k] for k in ("status_code", "content_type", "content_length")}
     except Exception as exc:
         log.warning("Inundation failed (non-critical): %s", exc)
