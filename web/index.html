@@ -12,6 +12,12 @@
 <header>
   <h1>桃園市即時水情監測</h1>
   <div id="updated">載入中...</div>
+  <div class="controls">
+    <label for="hour">淹水範圍：</label>
+    <select id="hour" disabled>
+      <option value="0">目前即時</option>
+    </select>
+  </div>
   <div id="notice" hidden></div>
 </header>
 <main>
@@ -30,4 +36,3 @@
 <script src="app.js"></script>
 </body>
 </html>
-
