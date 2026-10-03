@@ -199,3 +199,53 @@ footer {
     color: #7a3d00;
     border: 1px solid #f0a500;
 }
+
+/* ---- header: 標題 / 統計區間 / 下拉選單 併排，時鐘靠最右 ---- */
+.hdr-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 20px;
+}
+
+.hdr-row h1 { margin: 0; white-space: nowrap; }
+
+.hdr-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 16px;
+    font-size: 14px;
+}
+
+.hdr-controls #updated { margin: 0; font-size: 13px; opacity: .9; }
+.hdr-controls label { white-space: nowrap; }
+.hdr-controls select { font-size: 14px; padding: 2px 6px; border-radius: 4px; }
+
+#clock {
+    margin-left: auto;
+    font-size: 16px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* ---- 雨量級距色帶（圖面型式）---- */
+:root { --bh: 18px; }
+@media (max-height: 760px) { :root { --bh: 13px; } }
+
+.rain-legend { padding: 8px 10px; }
+.rl-title { font-family: "Noto Serif TC", serif; color: #6b5b00; font-size: 13px; text-align: center; margin-bottom: 6px; }
+.rl-body { display: flex; }
+.rl-labels { position: relative; width: 34px; height: calc(var(--bh) * 17); }
+.rl-labels span {
+    position: absolute;
+    right: 6px;
+    transform: translateY(-50%);
+    font-family: "Noto Serif TC", serif;
+    font-size: 12px;
+    color: #5a4a00;
+    line-height: 1;
+}
+.rl-bar { display: flex; flex-direction: column; width: 28px; }
+.rl-bar div { height: var(--bh); }
+.rl-note { margin-top: 6px; font-size: 11px; color: #666; max-width: 120px; line-height: 1.3; }
