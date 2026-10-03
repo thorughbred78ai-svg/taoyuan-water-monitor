@@ -171,3 +171,31 @@ footer {
     border: 2px solid #d00000;
     background: rgba(208, 0, 0, .35);
 }
+
+.controls {
+    margin-top: 8px;
+    font-size: 14px;
+}
+
+.controls select {
+    font-size: 14px;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.legend .sw {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    margin-right: 4px;
+    vertical-align: middle;
+    border: 1px solid #888;
+}
+
+.legend .row { white-space: nowrap; }
+
+#notice.forecast {
+    background: #fff0d6;
+    color: #7a3d00;
+    border: 1px solid #f0a500;
+}
