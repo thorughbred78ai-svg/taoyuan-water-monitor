@@ -7,7 +7,7 @@ import numpy as np
 from rasterio.io import MemoryFile
 from rasterio.transform import Affine, from_bounds
 
-from config import COLOR_TOLERANCE, RAINFALL_LEGEND
+from config import COLOR_TOLERANCE, DRY_IF_TRANSPARENT, RAINFALL_CLASSES
 from spatial import district_masks
 
 log = logging.getLogger(__name__)
@@ -72,19 +72,32 @@ def build_transform(metadata: dict[str, Any], shape: tuple[int, int]) -> Affine:
     )
 
 
-def decode_rainfall_mm(rgba: np.ndarray) -> np.ndarray:
-    """Map legend colors to mm. NaN where transparent / unmatched / no legend."""
-    mm = np.full(rgba.shape[:2], np.nan, dtype=np.float32)
-    if not RAINFALL_LEGEND:
-        return mm
-    colors = np.array(list(RAINFALL_LEGEND.keys()), dtype=np.int16)
-    values = np.array(list(RAINFALL_LEGEND.values()), dtype=np.float32)
+def decode_rainfall_class(rgba: np.ndarray) -> np.ndarray:
+    """Return class index (into RAINFALL_CLASSES) per pixel; -1 = transparent/unmatched."""
+    cls = np.full(rgba.shape[:2], -1, dtype=np.int16)
+    colors, owner = [], []
+    for i, (_, _, rgbs) in enumerate(RAINFALL_CLASSES):
+        for c in rgbs:
+            colors.append(c)
+            owner.append(i)
+    if not colors:
+        return cls
+    colors_a = np.array(colors, dtype=np.int16)
+    owner_a = np.array(owner, dtype=np.int16)
     rgb = rgba[..., :3].astype(np.int16)
-    dist = np.abs(rgb[:, :, None, :] - colors[None, None, :, :]).sum(-1)
+    dist = np.abs(rgb[:, :, None, :] - colors_a[None, None, :, :]).sum(-1)
     nearest, dmin = dist.argmin(-1), dist.min(-1)
     ok = (rgba[..., 3] > 0) & (dmin <= COLOR_TOLERANCE)
-    mm[ok] = values[nearest[ok]]
-    return mm
+    cls[ok] = owner_a[nearest[ok]]
+    return cls
+
+
+def range_label(lo: float, hi: float | None) -> str:
+    if hi is None:
+        return f"≥{lo:g}"
+    if lo == 0:
+        return f"<{hi:g}"
+    return f"{lo:g}–{hi:g}"
 
 
 def color_histogram(rgba: np.ndarray, inside: np.ndarray, top: int = 30) -> list[dict]:
@@ -114,22 +127,28 @@ def process_rainfall(png: bytes, metadata: dict | None, districts) -> dict[str, 
     rgba = read_rgba(png)
     transform = build_transform(metadata or {}, rgba.shape[:2])
     masks = district_masks(districts, transform, rgba.shape[:2])
-    mm = decode_rainfall_mm(rgba)
+    cls = decode_rainfall_class(rgba)
     colored = rgba[..., 3] > 0
 
     stats: dict[str, Any] = {}
     for name, m in masks.items():
-        vals = mm[m & ~np.isnan(mm)]
-        stats[name] = {
-            "max_mm": round(float(vals.max()), 1) if vals.size else None,
-            "mean_mm": round(float(vals.mean()), 1) if vals.size else None,
-            "valid_pixels": int(vals.size),
-            "colored_pixels": int((m & colored).sum()),
+        idx = cls[m & (cls >= 0)]
+        n_colored = int((m & colored).sum())
+        entry: dict[str, Any] = {
+            "max_mm": None, "max_range": None, "dry_inferred": False,
+            "valid_pixels": int(idx.size), "colored_pixels": n_colored,
+            "coverage_pct": round(100 * n_colored / max(int(m.sum()), 1), 1),
         }
+        if idx.size:
+            lo, hi, _ = RAINFALL_CLASSES[int(idx.max())]
+            entry.update(max_mm=float(lo), max_range=range_label(lo, hi))
+        elif n_colored == 0 and DRY_IF_TRANSPARENT:
+            entry.update(max_mm=0.0, max_range="<1", dry_inferred=True)
+        stats[name] = entry
     any_inside = np.logical_or.reduce(list(masks.values()))
     everywhere = np.ones(rgba.shape[:2], dtype=bool)
     return {
-        "legend_configured": bool(RAINFALL_LEGEND),
+        "legend_configured": bool(RAINFALL_CLASSES),
         "raster": {
             "width": int(rgba.shape[1]),
             "height": int(rgba.shape[0]),
