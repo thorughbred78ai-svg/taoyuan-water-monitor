@@ -8,6 +8,7 @@ from typing import Any
 from concurrent.futures import ThreadPoolExecutor
 
 from config import (
+    CWA_API_KEY, CWA_COUNTY,
     BOUNDARY_FILE, INUNDATION_HOURS, INUNDATION_PARAMS, INUNDATION_URL, LATEST_DIR,
     PRECIPITATION_URL, RAINFALL_ALERT_HOURS, RAINFALL_ALERT_MM, RAINFALL_HOURS,
     RAINFALL_WORKERS, RAW_DIR,
@@ -15,7 +16,9 @@ from config import (
 from raster_processor import (
     inundation_geojson, process_inundation, process_rainfall, rainfall_cells_geojson,
 )
+from cwa_client import CWAError, fetch_rain_stations, redact
 from spatial import load_districts
+from stations import parse_stations
 from utils import save_json
 from wra_client import WRAClient
 
@@ -94,6 +97,23 @@ def fetch_inundation(client: WRAClient, districts) -> dict[int, dict[str, Any]]:
     return result
 
 
+def fetch_stations_data() -> dict[str, Any]:
+    """CWA O-A0002-001 stations (non-critical; disabled when no key)."""
+    if not CWA_API_KEY:
+        log.info("CWA_API_KEY not set: station data disabled.")
+        return {"enabled": False, "reason": "CWA_API_KEY 未設定", "stations": []}
+    try:
+        return parse_stations(fetch_rain_stations(CWA_API_KEY), CWA_COUNTY)
+    except (CWAError, ValueError) as exc:
+        msg = redact(str(exc), CWA_API_KEY)
+        log.warning("CWA stations failed (non-critical): %s", msg)
+        return {"enabled": False, "reason": msg[:300], "stations": []}
+    except Exception as exc:  # noqa: BLE001
+        msg = redact(repr(exc), CWA_API_KEY)
+        log.warning("CWA stations unexpected error: %s", msg)
+        return {"enabled": False, "reason": msg[:300], "stations": []}
+
+
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     LATEST_DIR.mkdir(parents=True, exist_ok=True)
@@ -135,6 +155,14 @@ def main() -> int:
     # ---- Inundation 0..6h (non-critical) ----
     inun = fetch_inundation(client, districts)
     save_json(LATEST_DIR / "inundation_statistics.json", {"hours": {str(h): v for h, v in inun.items()}})
+
+    # ---- CWA stations (non-critical) ----
+    st_data = fetch_stations_data()
+    st_data["updated_at"] = now_iso()
+    save_json(LATEST_DIR / "stations.json", st_data)
+    status["stations"] = {k: st_data.get(k) for k in
+                          ("enabled", "reason", "station_count", "latest_obs_time",
+                           "negative_code_values", "unrecognized_elements")}
 
     # ---- Public payload (僅公開水文彙整值，不含個資) ----
     # 觀察：TimeStamp 約比執行時間早「累積小時數 + 約 2 小時」，推論為統計區間「起點」
