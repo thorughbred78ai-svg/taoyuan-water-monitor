@@ -100,8 +100,10 @@ const rainLayer = L.layerGroup().addTo(map);
 const stationLayer = L.layerGroup().addTo(map);
 const roadLayer = L.layerGroup().addTo(map);       // 一般感測點（可勾選）
 const roadAlertLayer = L.layerGroup().addTo(map);  // 超過門檻的示警（不受勾選影響）
-const floodLayer = L.layerGroup().addTo(map);
-const floodMarkerLayer = L.layerGroup().addTo(map);
+const floodLayer = L.layerGroup().addTo(map);            // 圖層控制的「淹水範圍」：範圍 + 標籤一起開關
+const floodPolyLayer = L.layerGroup().addTo(floodLayer);
+const floodMarkerLayer = L.layerGroup().addTo(floodLayer);
+let floodVisible = true;
 const rainAlertLayer = L.layerGroup().addTo(map);
 
 L.control.layers(null, {
@@ -110,6 +112,13 @@ L.control.layers(null, {
     "路面淹水感測器": roadLayer,
     "淹水範圍": floodLayer
 }, { collapsed: true, position: "topright" }).addTo(map);
+
+// 取消勾選「淹水範圍」：地圖上的淹水範圍、淹水標籤、淹水行政區紅框與彈窗淹水資訊一併隱藏
+map.on("overlayadd overlayremove", e => {
+    if (e.layer !== floodLayer) return;
+    floodVisible = e.type === "overlayadd";
+    if (districtLayer) districtLayer.setStyle(styleFor);
+});
 
 function addLegend() {
     const box = map.getContainer();
@@ -361,13 +370,14 @@ function popupHtml(name) {
     const stHtml = st.length ? `<br>測站最大 1H / 24H：${esc(mmText(maxOf(st, r1)))} / ${esc(mmText(maxOf(st, r24)))}` : "";
     const ra = roadSensors.filter(x => x.district === name && isRoadAlert(x));
     const roadHtml = ra.length ? `<br><span class="badge">⚠ 路面淹水感測器示警 ${ra.length} 處</span>` : "";
-    return `<strong>${esc(name)}</strong>${isFlooded(d) ? ' <span class="badge">⚠ 有淹水</span>' : ""}${roadHtml}<br>` +
-        `${selectedRain} 小時累積雨量（區內最高級距）：${esc(rainText(d))}${alertHtml}${stHtml}<br>` +
-        `淹水面積（${esc(floodLabel(selectedFlood))}）：${esc(fmt(f?.area_km2, "km²"))}`;
+    const floodBadge = floodVisible && isFlooded(d) ? ' <span class="badge">⚠ 有淹水</span>' : "";
+    const floodLine = floodVisible ? `<br>淹水面積（${esc(floodLabel(selectedFlood))}）：${esc(fmt(f?.area_km2, "km²"))}` : "";
+    return `<strong>${esc(name)}</strong>${floodBadge}${roadHtml}<br>` +
+        `${selectedRain} 小時累積雨量（區內最高級距）：${esc(rainText(d))}${alertHtml}${stHtml}${floodLine}`;
 }
 
 function styleFor(feature) {
-    const flooded = isFlooded(statusMap[districtName(feature.properties)]);
+    const flooded = floodVisible && isFlooded(statusMap[districtName(feature.properties)]);
     return {
         color: flooded ? "#d00000" : "#334155", weight: flooded ? 4 : 1.5,
         dashArray: flooded ? "6 4" : null, fillColor: "#000", fillOpacity: 0
@@ -395,7 +405,7 @@ async function renderRain() {
 }
 
 async function renderFlood() {
-    floodLayer.clearLayers();
+    floodPolyLayer.clearLayers();
     const key = String(selectedFlood);
     if (!(key in floodCache)) floodCache[key] = await loadOptionalJSON(`data/inundation_h${key}.geojson`);
     const gj = floodCache[key];
@@ -403,7 +413,7 @@ async function renderFlood() {
         L.geoJSON(gj, {
             pane: "flood", interactive: false,
             style: { color: "#d00000", weight: 2, fillColor: "#ff0000", fillOpacity: 0.6 }
-        }).addTo(floodLayer);
+        }).addTo(floodPolyLayer);
     }
 }
 
@@ -504,7 +514,14 @@ function renderAlerts() {
     });
 }
 
-function renderWarnings() {
+/* =====================================================
+   警戒資訊（輪播）
+===================================================== */
+const WARN_ROTATE_MS = 5000;
+const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+let warnItems = [], warnIdx = 0, warnPaused = reduceMotion, warnHover = false, warnAll = false;
+
+function collectWarnings() {
     const items = [];
     const { hours, mm } = alertCfg();
     status.districts.forEach(d => {
@@ -525,14 +542,70 @@ function renderWarnings() {
     roadSensors.filter(isRoadAlert).forEach(s => items.push({ level: "danger",
         title: `${s.name} 路面淹水感測器示警`,
         desc: `${s.district ?? "-"}｜高度 ${s.height}（門檻 ${roadThreshold()}）｜${twTime(s.data_time)}` }));
-    items.sort((a, b) => (b.level === "danger") - (a.level === "danger"));
-    $("warningList").innerHTML = items.length
-        ? items.map(w => `
-            <div class="warning ${w.level === "danger" ? "warning-danger" : ""}">
-              <span class="warning-dot"></span>
-              <div><div class="warning-title">${esc(w.title)}</div><div class="warning-desc">${esc(w.desc)}</div></div>
-            </div>`).join("")
-        : `<div style="padding:18px 10px;text-align:center;color:var(--ok);font-weight:700">目前無明顯雨量警戒</div>`;
+    return items.sort((a, b) => (b.level === "danger") - (a.level === "danger"));
+}
+
+function warnHtml(w) {
+    return `<span class="warning-dot"></span><div><div class="warning-title">${esc(w.title)}</div><div class="warning-desc">${esc(w.desc)}</div></div>`;
+}
+
+function renderWarnings() {
+    warnItems = collectWarnings();
+    if (warnIdx >= warnItems.length) warnIdx = 0;
+    drawWarnings();
+}
+
+function drawWarnings() {
+    const box = $("warningList");
+    const n = warnItems.length;
+    if (!n) {
+        box.innerHTML = `<div style="padding:18px 10px;text-align:center;color:var(--ok);font-weight:700">目前無明顯警戒</div>`;
+        return;
+    }
+    if (warnAll) {
+        box.innerHTML = `<div class="wc-all">` + warnItems.map(w =>
+            `<div class="warning ${w.level === "danger" ? "warning-danger" : ""}">${warnHtml(w)}</div>`).join("") +
+            `</div><div class="wc" style="padding-top:0"><div class="wc-ctl"><span class="wc-count">共 ${n} 則</span>` +
+            `<button class="wc-btn" data-act="mode" type="button" style="margin-left:auto">改為輪播</button></div></div>`;
+    } else {
+        const w = warnItems[warnIdx];
+        box.innerHTML = `<div class="wc">` +
+            `<div class="wc-card warning ${w.level === "danger" ? "warning-danger" : ""}" role="group" aria-label="警戒資訊 ${warnIdx + 1}/${n}">${warnHtml(w)}</div>` +
+            `<div class="wc-ctl">` +
+              `<button class="wc-btn" data-act="prev" type="button" aria-label="上一則">‹</button>` +
+              `<button class="wc-btn" data-act="pause" type="button" aria-label="${warnPaused ? "開始輪播" : "暫停輪播"}">${warnPaused ? "▶" : "❚❚"}</button>` +
+              `<button class="wc-btn" data-act="next" type="button" aria-label="下一則">›</button>` +
+              `<span class="wc-count">${warnIdx + 1}/${n}</span>` +
+              `<span class="wc-dots">` + warnItems.map((x, i) =>
+                  `<button class="wc-dot ${x.level === "danger" ? "danger" : ""} ${i === warnIdx ? "on" : ""}" data-idx="${i}" type="button" aria-label="第 ${i + 1} 則"></button>`).join("") + `</span>` +
+            `</div>` +
+            `<div class="wc-ctl"><button class="wc-btn" data-act="mode" type="button">顯示全部</button></div>` +
+          `</div>`;
+    }
+}
+
+function setupWarnCarousel() {
+    const box = $("warningList");
+    box.addEventListener("click", e => {
+        const btn = e.target.closest("button");
+        if (!btn || !warnItems.length) return;
+        const n = warnItems.length;
+        if (btn.dataset.idx !== undefined) warnIdx = Number(btn.dataset.idx);
+        else if (btn.dataset.act === "prev") warnIdx = (warnIdx - 1 + n) % n;
+        else if (btn.dataset.act === "next") warnIdx = (warnIdx + 1) % n;
+        else if (btn.dataset.act === "pause") warnPaused = !warnPaused;
+        else if (btn.dataset.act === "mode") warnAll = !warnAll;
+        drawWarnings();
+    });
+    box.addEventListener("mouseenter", () => { warnHover = true; });
+    box.addEventListener("mouseleave", () => { warnHover = false; });
+    box.addEventListener("focusin", () => { warnHover = true; });
+    box.addEventListener("focusout", () => { warnHover = false; });
+    setInterval(() => {
+        if (warnPaused || warnHover || warnAll || warnItems.length < 2 || document.visibilityState !== "visible") return;
+        warnIdx = (warnIdx + 1) % warnItems.length;
+        drawWarnings();
+    }, WARN_ROTATE_MS);
 }
 
 function renderSystem() {
@@ -715,6 +788,55 @@ function setupRefresh() {
     updateRefreshInfo();
 }
 
+/* =====================================================
+   區塊展開 / 收合（讓使用者只看需要的資訊，減少上下捲動）
+===================================================== */
+const PANEL_KEY = "taoyuan-water-panels";
+const MOBILE_COLLAPSED = ["rank", "search", "sys", "district"];   // 手機預設只展開統計與警戒
+
+function setupPanels() {
+    const panels = [...document.querySelectorAll(".panel[data-panel]")];
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(PANEL_KEY) || "{}"); } catch { /* ignore */ }
+    const narrow = window.innerWidth < 820;
+    const chips = $("chips");
+
+    const persist = () => {
+        const st = Object.fromEntries(panels.map(p => [p.dataset.panel, p.classList.contains("collapsed")]));
+        try { localStorage.setItem(PANEL_KEY, JSON.stringify(st)); } catch { /* ignore */ }
+    };
+    const apply = (p, collapsed) => {
+        p.classList.toggle("collapsed", collapsed);
+        p.querySelector(".panel-toggle")?.setAttribute("aria-expanded", String(!collapsed));
+        const chip = chips.querySelector(`[data-target="${p.dataset.panel}"]`);
+        if (chip) chip.setAttribute("aria-pressed", String(!collapsed));
+    };
+
+    panels.forEach(p => {
+        const head = p.querySelector(".panel-head");
+        const btn = document.createElement("button");
+        btn.type = "button"; btn.className = "panel-toggle";
+        btn.setAttribute("aria-label", `展開或收合：${p.dataset.title}`);
+        head.appendChild(btn);
+
+        const chip = document.createElement("button");
+        chip.type = "button"; chip.className = "chip"; chip.dataset.target = p.dataset.panel;
+        chip.textContent = p.dataset.title;
+        chips.appendChild(chip);
+
+        const toggle = () => { apply(p, !p.classList.contains("collapsed")); persist(); };
+        head.addEventListener("click", e => { if (!e.target.closest("select, input, a")) toggle(); });
+        chip.addEventListener("click", toggle);
+
+        const initial = p.dataset.panel in saved ? saved[p.dataset.panel]
+                      : (narrow && MOBILE_COLLAPSED.includes(p.dataset.panel));
+        apply(p, !!initial);
+    });
+
+    $("expandAll").addEventListener("click", () => { panels.forEach(p => apply(p, false)); persist(); });
+    $("collapseAll").addEventListener("click", () => { panels.forEach(p => apply(p, true)); persist(); });
+}
+
 function startClock() {
     const fmtParts = new Intl.DateTimeFormat("zh-TW", {
         timeZone: "Asia/Taipei", hour12: false, year: "numeric", month: "2-digit",
@@ -764,6 +886,8 @@ function renderAll() {
 async function main() {
     startClock();
     setupTheme();
+    setupPanels();
+    setupWarnCarousel();
     $("stationSearch").addEventListener("input", e => renderStationList(e.target.value.trim()));
     try {
         const [boundary, st, sd, rd] = await Promise.all([
