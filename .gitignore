@@ -1,39 +1,6 @@
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-
-# Virtual environment
 .venv/
-venv/
-env/
+__pycache__/
+*.pyc
+data/latest/
+_site/
 
-# IDE
-.vscode/
-.idea/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Tests
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Temporary GIS
-*.gpkg-journal
-*.qpj
-*.aux.xml
-
-# Generated raw files
-data/latest/raw/*.bin
-data/latest/raw/*.json
-
-# Generated raster files
-data/latest/*.tif
-data/latest/*.tiff
-
-# Local output
-dist/
-build/
