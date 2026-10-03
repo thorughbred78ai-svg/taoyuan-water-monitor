@@ -3,7 +3,8 @@
 /* =====================================================
    設定
 ===================================================== */
-const REFRESH_MIN = 30;       // 與 workflow cron 一致（*/30）
+const REFRESH_OPTIONS = [5, 10, 30, 60];   // 分鐘；預設 30
+const REFRESH_DEFAULT = 30;
 const STALE_HOURS = 4;        // WRA 資料本身約延遲 2 小時
 // 測站警戒門檻：面板自訂，非氣象署官方標準，請依業務需求調整
 const STATION_THRESHOLDS = { warning: 10, danger: 16 };   // 1 小時雨量 mm
@@ -76,6 +77,7 @@ const districtName = p => p.TOWNNAME ?? p.townname ?? p.district ?? p["鄉鎮市
 ===================================================== */
 let status = null, stationData = null, stations = [];
 let roadData = null, roadSensors = [];
+let currentSig = "", refreshMin = REFRESH_DEFAULT, nextAt = 0, lastCheck = null, lastResult = "", reloading = false;
 let statusMap = {}, hourInfo = {};
 let selectedRain = 1, selectedFlood = 0;
 let districtLayer = null;
@@ -541,8 +543,7 @@ function renderSystem() {
         ["最後更新", `<strong>${esc(twTime(status.updated_at))}</strong>`],
         ["雨量資料時間", `<strong>${esc(twTime(rinfo?.window_end))}</strong>`],
         ["測站觀測時間", `<strong>${esc(twTime(stationData?.latest_obs_time))}</strong>`],
-        ["路面感測器時間", `<strong>${esc(twTime(roadData?.latest_data_time))}</strong>`],
-        ["更新週期", `<strong>約 ${REFRESH_MIN} 分鐘</strong>`]
+        ["路面感測器時間", `<strong>${esc(twTime(roadData?.latest_data_time))}</strong>`]
     ].map(([k, v]) => `<div class="sys-row"><span>${k}</span>${v}</div>`).join("");
     $("liveDot").style.background = st.color;
     $("liveText").textContent = st.key === "ok" ? "LIVE" : st.key === "partial" ? "PARTIAL" : "STALE";
@@ -598,8 +599,9 @@ function updateWindowText() {
         : "雨量統計區間：-";
 }
 
-function setupSelects() {
-    const fs = $("floodHour");
+function fillSelects() {
+    const fs = $("floodHour"), rs = $("rainHours");
+    const fv = String(selectedFlood), rv = String(selectedRain);
     fs.innerHTML = "";
     for (let h = 0; h <= 6; h++) {
         const info = hourInfo[String(h)];
@@ -608,10 +610,6 @@ function setupSelects() {
         o.textContent = floodLabel(h) + (info && !info.available ? "（無資料）" : "");
         fs.appendChild(o);
     }
-    fs.disabled = false; fs.value = "0";
-    fs.addEventListener("change", () => { selectedFlood = Number(fs.value); renderAll(); });
-
-    const rs = $("rainHours");
     rs.innerHTML = "";
     for (let h = 1; h <= 24; h++) {
         const info = status.rainfall_hours?.[String(h)];
@@ -620,8 +618,101 @@ function setupSelects() {
         o.textContent = `${h} 小時` + (info && !info.available ? "（無資料）" : "");
         rs.appendChild(o);
     }
-    rs.disabled = false; rs.value = String(selectedRain);
+    fs.value = fv; rs.value = rv;
+}
+
+function setupSelects() {
+    fillSelects();
+    const fs = $("floodHour"), rs = $("rainHours");
+    fs.disabled = false; rs.disabled = false;
+    fs.addEventListener("change", () => { selectedFlood = Number(fs.value); renderAll(); });
     rs.addEventListener("change", () => { selectedRain = Number(rs.value); renderAll(); });
+}
+
+/* =====================================================
+   自動更新：依「更新週期」重新讀取資料，資料有變動才重繪
+===================================================== */
+const REFRESH_KEY = "taoyuan-water-refresh";
+
+function signature(st, sd, rd) {
+    return [st?.updated_at, sd?.updated_at, rd?.updated_at].join("|");
+}
+
+function applyData(st, sd, rd) {
+    status = st;
+    statusMap = Object.fromEntries(st.districts.map(d => [d.name, d]));
+    hourInfo = st.inundation_hours ?? {};
+    stationData = sd;
+    stations = sd?.enabled ? (sd.stations ?? []) : [];
+    roadData = rd;
+    roadSensors = rd?.enabled ? (rd.sensors ?? []) : [];
+}
+
+function scheduleNext() { nextAt = Date.now() + refreshMin * 60000; }
+
+function updateRefreshInfo() {
+    const left = Math.max(0, Math.round((nextAt - Date.now()) / 1000));
+    const mm = String(Math.floor(left / 60)).padStart(2, "0"), ss = String(left % 60).padStart(2, "0");
+    $("nextCheck").textContent = reloading ? "檢查中…" : `${mm}:${ss}`;
+    $("refreshInfo").textContent = lastCheck
+        ? `上次檢查 ${lastCheck.toLocaleTimeString("zh-TW", { timeZone: "Asia/Taipei", hour12: false })}　${lastResult}`
+        : "";
+}
+
+async function refreshData() {
+    if (reloading) return;
+    reloading = true; updateRefreshInfo();
+    try {
+        const [st, sd, rd] = await Promise.all([
+            loadJSON("data/district_status.json"),
+            loadOptionalJSON("data/stations.json"),
+            loadOptionalJSON("data/road_sensors.json")
+        ]);
+        lastCheck = new Date();
+        const sig = signature(st, sd, rd);
+        if (sig !== currentSig) {
+            currentSig = sig;
+            applyData(st, sd, rd);
+            Object.keys(rainCache).forEach(k => delete rainCache[k]);    // 網格/淹水 GeoJSON 重新讀取
+            Object.keys(floodCache).forEach(k => delete floodCache[k]);
+            fillSelects();
+            renderStationMarkers(); renderKPI(); renderRanking();
+            renderStationList($("stationSearch").value.trim());
+            await renderAll();
+            lastResult = "資料已更新";
+        } else {
+            lastResult = "資料無變動";
+        }
+    } catch (e) {
+        console.warn("refresh failed", e);
+        lastCheck = new Date();
+        lastResult = "讀取失敗，保留目前畫面";
+    } finally {
+        reloading = false; scheduleNext(); updateRefreshInfo();
+    }
+}
+
+function setupRefresh() {
+    try {
+        const v = Number(localStorage.getItem(REFRESH_KEY));
+        if (REFRESH_OPTIONS.includes(v)) refreshMin = v;
+    } catch { /* ignore */ }
+    const sel = $("refreshSel");
+    sel.value = String(refreshMin);
+    sel.addEventListener("change", () => {
+        refreshMin = Number(sel.value);
+        try { localStorage.setItem(REFRESH_KEY, String(refreshMin)); } catch { /* ignore */ }
+        scheduleNext(); updateRefreshInfo();
+    });
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible" && Date.now() >= nextAt) refreshData();
+    });
+    scheduleNext();
+    setInterval(() => {
+        if (document.visibilityState === "visible" && Date.now() >= nextAt) refreshData();
+        updateRefreshInfo();
+    }, 1000);
+    updateRefreshInfo();
 }
 
 function startClock() {
@@ -681,14 +772,9 @@ async function main() {
             loadOptionalJSON("data/stations.json"),
             loadOptionalJSON("data/road_sensors.json")
         ]);
-        status = st;
-        statusMap = Object.fromEntries(st.districts.map(d => [d.name, d]));
-        hourInfo = st.inundation_hours ?? {};
+        applyData(st, sd, rd);
+        currentSig = signature(st, sd, rd);
         selectedRain = st.default_rainfall_hours ?? 1;
-        stationData = sd;
-        stations = sd?.enabled ? (sd.stations ?? []) : [];
-        roadData = rd;
-        roadSensors = rd?.enabled ? (rd.sensors ?? []) : [];
 
         districtLayer = L.geoJSON(boundary, {
             style: styleFor,
@@ -706,6 +792,7 @@ async function main() {
         renderRanking();
         renderStationList();
         await renderAll();
+        setupRefresh();
     } catch (error) {
         console.error(error);
         $("windowText").textContent = "資料載入失敗，請稍後再試";
