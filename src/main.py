@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import logging
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from config import (
     BOUNDARY_FILE, INUNDATION_PARAMS, INUNDATION_URL, LATEST_DIR, PRECIPITATION_URL,
     RAINFALL_CUMULATIVE_HOURS, RAINFALL_HOURS_FALLBACK, RAW_DIR,
 )
-from raster_processor import process_inundation, process_rainfall
+from raster_processor import inundation_geojson, process_inundation, process_rainfall
 from spatial import load_districts
 from utils import save_json
 from wra_client import WRAClient, WRAError
@@ -89,6 +89,11 @@ def main() -> int:
         in_file = RAW_DIR / "inundation.bin"
         inr = client.get(INUNDATION_URL, in_file, INUNDATION_PARAMS or None)
         inun = process_inundation(in_file.read_bytes(), inr["metadata"], districts)
+        if inun.get("available"):
+            save_json(
+                LATEST_DIR / "inundation.geojson",
+                inundation_geojson(in_file.read_bytes(), inr["metadata"], districts),
+            )
         status["inundation"] = {k: inr[k] for k in ("status_code", "content_type", "content_length")}
     except Exception as exc:
         log.warning("Inundation failed (non-critical): %s", exc)
@@ -112,9 +117,22 @@ def main() -> int:
             "inundation_area_km2": area,
         })
 
+    # 觀察：TimeStamp 約比執行時間早「累積小時數 + 約 2 小時」，推論為統計區間「起點」
+    # （1h 與 24h 兩組資料皆符合）；尚未由 WRA 文件證實。
+    window_start = (rf["metadata"] or {}).get("TimeStamp")
+    window_end = None
+    try:
+        window_end = (
+            datetime.fromisoformat(window_start) + timedelta(hours=used_hours)
+        ).isoformat()
+    except (TypeError, ValueError):
+        pass
+
     save_json(LATEST_DIR / "district_status.json", {
         "updated_at": status["updated_at"],
-        "data_time": (rf["metadata"] or {}).get("TimeStamp"),
+        "window_start": window_start,
+        "window_end": window_end,
+        "data_time": window_end or window_start,
         "city": "桃園市",
         "cumulative_hours": used_hours,
         "rainfall_legend_configured": rain["legend_configured"],
