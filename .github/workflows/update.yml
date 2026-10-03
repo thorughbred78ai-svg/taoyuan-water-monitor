@@ -50,6 +50,7 @@ jobs:
         env:
           # 於 Settings → Variables 設定（非機密）；未設定則為空
           INUNDATION_PARAMS: ${{ vars.INUNDATION_PARAMS }}
+          CWA_API_KEY: ${{ secrets.CWA_API_KEY }}   # 氣象署授權碼（Repository secret，可留空）
           RAINFALL_CUMULATIVE_HOURS: ${{ inputs.rainfall_hours || '1' }}
         run: python src/main.py
 
@@ -78,6 +79,7 @@ jobs:
           cp data/latest/district_status.json _site/data/
           cp data/latest/inundation_h*.geojson _site/data/ 2>/dev/null || true
           cp data/latest/rainfall_h*.geojson _site/data/ 2>/dev/null || true
+          cp data/latest/stations.json _site/data/ 2>/dev/null || true
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
