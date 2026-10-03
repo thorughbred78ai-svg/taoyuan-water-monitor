@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -17,6 +18,16 @@ PRECIPITATION_URL = f"{WRA_BASE_URL}/rasterMap/precipitation"
 INUNDATION_URL = f"{WRA_BASE_URL}/rasterMap/inundation"
 
 RAINFALL_CUMULATIVE_HOURS = int(os.getenv("RAINFALL_CUMULATIVE_HOURS", "1"))
+
+# HTTP 400 拒絕設定值時，依序嘗試的備援小時數
+RAINFALL_HOURS_FALLBACK = (3, 6, 12, 24)
+
+# 淹水 API（WRA Swagger）：region 為 taiwan/taoyuan/...；
+# forecastHours：0=目前即時淹水範圍，1~6=未來預測 1~6 小時。
+# 可用環境變數 INUNDATION_PARAMS（JSON）覆寫，例如 '{"region":"taoyuan","forecastHours":0}'。
+INUNDATION_PARAMS: dict = json.loads(
+    os.getenv("INUNDATION_PARAMS") or '{"region": "taoyuan", "forecastHours": 0}'
+)
 
 HTTP_TIMEOUT = (10, 60)  # (connect, read) seconds
 HTTP_RETRIES = 3
