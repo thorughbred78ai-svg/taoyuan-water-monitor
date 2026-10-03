@@ -75,6 +75,7 @@ const districtName = p => p.TOWNNAME ?? p.townname ?? p.district ?? p["鄉鎮市
    狀態
 ===================================================== */
 let status = null, stationData = null, stations = [];
+let roadData = null, roadSensors = [];
 let statusMap = {}, hourInfo = {};
 let selectedRain = 1, selectedFlood = 0;
 let districtLayer = null;
@@ -95,6 +96,8 @@ map.createPane("flood"); map.getPane("flood").style.zIndex = 450;
 
 const rainLayer = L.layerGroup().addTo(map);
 const stationLayer = L.layerGroup().addTo(map);
+const roadLayer = L.layerGroup().addTo(map);       // 一般感測點（可勾選）
+const roadAlertLayer = L.layerGroup().addTo(map);  // 超過門檻的示警（不受勾選影響）
 const floodLayer = L.layerGroup().addTo(map);
 const floodMarkerLayer = L.layerGroup().addTo(map);
 const rainAlertLayer = L.layerGroup().addTo(map);
@@ -102,23 +105,107 @@ const rainAlertLayer = L.layerGroup().addTo(map);
 L.control.layers(null, {
     "雨量網格（水利署）": rainLayer,
     "雨量測站（氣象署）": stationLayer,
+    "路面淹水感測器": roadLayer,
     "淹水範圍": floodLayer
 }, { collapsed: true, position: "topright" }).addTo(map);
 
 function addLegend() {
-    const legend = L.control({ position: "bottomright" });
-    legend.onAdd = () => {
-        const div = L.DomUtil.create("div", "legend rain-legend");
-        div.innerHTML =
-            `<div class="rl-title">區內最高雨量級距<br>毫米(mm)</div>` +
-            `<div class="rl-body"><div class="rl-labels">` +
-            LEGEND_TICKS.map((t, i) => `<span style="top:calc(var(--bh) * ${i + 1})">${t}</span>`).join("") +
-            `</div><div class="rl-bar">` +
-            LEGEND_BLOCKS.map(c => `<div style="background:${c}"></div>`).join("") +
-            `</div></div>`;
-        return div;
+    const box = map.getContainer();
+    const div = document.createElement("div");
+    div.className = "legend rain-legend map-legend";
+    div.innerHTML =
+        `<div class="rl-head" tabindex="0" role="group" aria-label="雨量圖例；可拖曳或用方向鍵移動，雙擊或按 Home 重置位置" title="拖曳移動／雙擊重置位置">` +
+          `<span class="rl-grip" aria-hidden="true">⠿</span>` +
+          `<span class="rl-title">區內最高雨量級距<br>毫米(mm)</span>` +
+          `<button class="rl-toggle" type="button" aria-label="收合或展開圖例">−</button>` +
+        `</div>` +
+        `<div class="rl-body"><div class="rl-labels">` +
+        LEGEND_TICKS.map((t, i) => `<span style="top:calc(var(--bh) * ${i + 1})">${t}</span>`).join("") +
+        `</div><div class="rl-bar">` +
+        LEGEND_BLOCKS.map(c => `<div style="background:${c}"></div>`).join("") +
+        `</div></div>`;
+    box.appendChild(div);
+    L.DomEvent.disableClickPropagation(div);
+    L.DomEvent.disableScrollPropagation(div);
+
+    const head = div.querySelector(".rl-head");
+    const toggle = div.querySelector(".rl-toggle");
+    const KEY = "taoyuan-water-legend";
+    let moved = false;
+
+    const clamp = (x, y) => {
+        const bw = box.clientWidth - div.offsetWidth, bh = box.clientHeight - div.offsetHeight;
+        return [Math.min(Math.max(x, 0), Math.max(bw, 0)), Math.min(Math.max(y, 0), Math.max(bh, 0))];
     };
-    legend.addTo(map);
+    const place = (x, y) => {
+        [x, y] = clamp(x, y);
+        div.classList.add("moved");
+        div.style.left = x + "px"; div.style.top = y + "px";
+        moved = true;
+    };
+    const save = () => {
+        const bw = Math.max(box.clientWidth - div.offsetWidth, 1), bh = Math.max(box.clientHeight - div.offsetHeight, 1);
+        try { localStorage.setItem(KEY, JSON.stringify({ fx: div.offsetLeft / bw, fy: div.offsetTop / bh })); } catch { /* ignore */ }
+    };
+    const reset = () => {
+        moved = false;
+        div.classList.remove("moved");
+        div.style.left = div.style.top = "";
+        try { localStorage.removeItem(KEY); } catch { /* ignore */ }
+    };
+    const restore = () => {
+        try {
+            const v = JSON.parse(localStorage.getItem(KEY) || "null");
+            if (v) place(v.fx * (box.clientWidth - div.offsetWidth), v.fy * (box.clientHeight - div.offsetHeight));
+        } catch { /* ignore */ }
+    };
+    const setCollapsed = c => {
+        div.classList.toggle("collapsed", c);
+        toggle.textContent = c ? "+" : "−";
+        if (moved) place(div.offsetLeft, div.offsetTop);
+    };
+
+    // 拖曳（滑鼠/觸控/手寫筆）
+    let drag = null;
+    head.addEventListener("pointerdown", e => {
+        if (e.target.closest(".rl-toggle")) return;
+        const r = div.getBoundingClientRect(), b = box.getBoundingClientRect();
+        drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, bx: b.left, by: b.top };
+        head.setPointerCapture(e.pointerId);
+        div.classList.add("dragging");
+        e.preventDefault();
+    });
+    head.addEventListener("pointermove", e => {
+        if (!drag) return;
+        place(e.clientX - drag.bx - drag.dx, e.clientY - drag.by - drag.dy);
+    });
+    const end = e => {
+        if (!drag) return;
+        drag = null; div.classList.remove("dragging");
+        try { head.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+        save();
+    };
+    head.addEventListener("pointerup", end);
+    head.addEventListener("pointercancel", end);
+    head.addEventListener("dblclick", e => { if (!e.target.closest(".rl-toggle")) reset(); });
+
+    // 鍵盤：方向鍵移動、Home 重置、Enter/空白 收合
+    head.addEventListener("keydown", e => {
+        const step = e.shiftKey ? 40 : 12;
+        const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+        if (d) {
+            e.preventDefault();
+            place(div.offsetLeft + d[0], div.offsetTop + d[1]); save();
+        } else if (e.key === "Home") { e.preventDefault(); reset(); }
+        else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setCollapsed(!div.classList.contains("collapsed")); }
+    });
+    toggle.addEventListener("click", () => setCollapsed(!div.classList.contains("collapsed")));
+
+    // 視窗/容器縮放時維持在範圍內
+    new ResizeObserver(() => { if (moved) { place(div.offsetLeft, div.offsetTop); } }).observe(box);
+
+    if (box.clientWidth < 520) setCollapsed(true);   // 手機預設收合，避免遮住地圖
+    restore();
 }
 
 /* =====================================================
@@ -183,6 +270,46 @@ function renderKPI() {
     $("stationCount").textContent = ok ? stations.length : "--";
 }
 
+/* =====================================================
+   路面淹水感測器（桃園市政府資料開放平台）
+===================================================== */
+const roadThreshold = () => roadData?.alert_height ?? 15;
+const isRoadAlert = s => typeof s.height === "number" && s.height > roadThreshold();
+
+function roadPopup(s) {
+    return `<strong>${esc(s.name)}</strong>` +
+        `${isRoadAlert(s) ? ' <span class="badge">⚠ 超過 ' + esc(roadThreshold()) + '</span>' : ""}<br>` +
+        `地點：${esc(s.address ?? "-")}<br>` +
+        `行政區：${esc(s.district ?? "-")}　代碼：${esc(s.id)}<br>` +
+        `高度（height）：<strong>${esc(s.height ?? "-")}</strong>（單位依資料集定義）<br>` +
+        `資料時間：${esc(twTime(s.data_time))}`;
+}
+
+function renderRoad() {
+    roadLayer.clearLayers();
+    roadAlertLayer.clearLayers();
+    roadSensors.forEach(s => {
+        const alert = isRoadAlert(s);
+        const wet = typeof s.height === "number" && s.height > 0;
+        const cls = alert ? "alert" : wet ? "wet" : s.height == null ? "na" : "";
+        const size = alert ? 20 : 16;
+        const marker = L.marker([s.lat, s.lng], {
+            icon: L.divIcon({ className: "", html: `<div class="rs-dot ${cls}"></div>`,
+                              iconSize: [size, size], iconAnchor: [size / 2, size / 2] }),
+            zIndexOffset: alert ? 900 : 0,
+            title: `${s.name} 高度 ${s.height ?? "-"}`
+        }).bindPopup(() => roadPopup(s));
+        if (alert) {
+            marker.addTo(roadAlertLayer);
+            labelMarker([s.lat, s.lng], "rain-marker high road",
+                `⚠ 路面淹水 ${s.name} 高度 ${s.height}`,
+                () => map.setView([s.lat, s.lng], 16)).addTo(roadAlertLayer);
+        } else {
+            marker.addTo(roadLayer);
+        }
+    });
+}
+
 function stationsDisabledNote() {
     const reason = stationData?.reason ? `（${stationData.reason}）` : "";
     return `<div class="empty-note">氣象署測站資料未啟用${esc(reason)}<br>請於 Repository secrets 設定 CWA_API_KEY。</div>`;
@@ -230,7 +357,9 @@ function popupHtml(name) {
         : "";
     const st = stations.filter(s => s.district === name);
     const stHtml = st.length ? `<br>測站最大 1H / 24H：${esc(mmText(maxOf(st, r1)))} / ${esc(mmText(maxOf(st, r24)))}` : "";
-    return `<strong>${esc(name)}</strong>${isFlooded(d) ? ' <span class="badge">⚠ 有淹水</span>' : ""}<br>` +
+    const ra = roadSensors.filter(x => x.district === name && isRoadAlert(x));
+    const roadHtml = ra.length ? `<br><span class="badge">⚠ 路面淹水感測器示警 ${ra.length} 處</span>` : "";
+    return `<strong>${esc(name)}</strong>${isFlooded(d) ? ' <span class="badge">⚠ 有淹水</span>' : ""}${roadHtml}<br>` +
         `${selectedRain} 小時累積雨量（區內最高級距）：${esc(rainText(d))}${alertHtml}${stHtml}<br>` +
         `淹水面積（${esc(floodLabel(selectedFlood))}）：${esc(fmt(f?.area_km2, "km²"))}`;
 }
@@ -335,6 +464,12 @@ function buildMessages() {
             text: `${hours} 小時累積雨量可能超過 ${mm} mm（級距跨越門檻）：` +
                 poss.map(d => `${d.name}（${rainAlertOf(d).range} mm）`).join("、") });
     }
+    const roadAlerts = roadSensors.filter(isRoadAlert);
+    if (roadAlerts.length) msgs.push({ cls: "red", badge: "路面淹水",
+        text: `路面淹水感測器高度超過 ${roadThreshold()}：` +
+            roadAlerts.map(s => `${s.name}（${s.district ?? "-"}，${s.height}）`).join("、") });
+    if (roadData && roadData.enabled === false) msgs.push({ cls: "", badge: "感測器", text: `路面淹水感測器資料未取得：${roadData.reason ?? "未知原因"}` });
+
     const info = hourInfo[String(selectedFlood)];
     const flooded = status.districts.filter(d => isFlooded(d));
     if (info && !info.available) {
@@ -385,6 +520,9 @@ function renderWarnings() {
         if (v >= STATION_THRESHOLDS.danger) items.push({ level: "danger", title: `${s.name}測站達強降雨門檻`, desc: `1 小時雨量 ${v.toFixed(1)} mm（面板自訂門檻，非官方）` });
         else if (v >= STATION_THRESHOLDS.warning) items.push({ level: "warn", title: `${s.name}測站雨勢偏強`, desc: `1 小時雨量 ${v.toFixed(1)} mm（面板自訂門檻，非官方）` });
     });
+    roadSensors.filter(isRoadAlert).forEach(s => items.push({ level: "danger",
+        title: `${s.name} 路面淹水感測器示警`,
+        desc: `${s.district ?? "-"}｜高度 ${s.height}（門檻 ${roadThreshold()}）｜${twTime(s.data_time)}` }));
     items.sort((a, b) => (b.level === "danger") - (a.level === "danger"));
     $("warningList").innerHTML = items.length
         ? items.map(w => `
@@ -403,6 +541,7 @@ function renderSystem() {
         ["最後更新", `<strong>${esc(twTime(status.updated_at))}</strong>`],
         ["雨量資料時間", `<strong>${esc(twTime(rinfo?.window_end))}</strong>`],
         ["測站觀測時間", `<strong>${esc(twTime(stationData?.latest_obs_time))}</strong>`],
+        ["路面感測器時間", `<strong>${esc(twTime(roadData?.latest_data_time))}</strong>`],
         ["更新週期", `<strong>約 ${REFRESH_MIN} 分鐘</strong>`]
     ].map(([k, v]) => `<div class="sys-row"><span>${k}</span>${v}</div>`).join("");
     $("liveDot").style.background = st.color;
@@ -421,16 +560,18 @@ function renderDistricts() {
     $("districtHint").textContent = `${selectedRain} 小時累積雨量 · ${rows.length} 區`;
     $("districtGrid").innerHTML = rows.map(d => {
         const r = rainOf(d), a = rainAlertOf(d), fl = isFlooded(d);
+        const ra = roadSensors.filter(x => x.district === d.name && isRoadAlert(x)).length;
         const st = stations.filter(s => s.district === d.name);
         const heavy = (selectedRain === hours && (r?.mm ?? 0) >= mm) ||
                       (maxOf(st, r1) ?? 0) >= STATION_THRESHOLDS.danger;
         const width = Math.min(((r?.mm ?? 0) / 100) * 100, 100);
         const range = r?.range == null ? "-" : r.range;
         return `
-        <div class="district-card ${heavy ? "rain-heavy" : ""} ${fl ? "flooded" : ""} ${a ? "rain-alert" : ""}" data-name="${esc(d.name)}">
+        <div class="district-card ${heavy ? "rain-heavy" : ""} ${fl || ra ? "flooded" : ""} ${a ? "rain-alert" : ""}" data-name="${esc(d.name)}">
           <div class="district-top">
             <span class="district-name">${esc(d.name)}
               ${fl ? '<span class="badge">⚠淹水</span>' : ""}
+              ${ra ? `<span class="badge">⚠路面${ra}處</span>` : ""}
               ${a ? `<span class="badge ${a.level === "high" ? "rain" : "maybe"}">${a.level === "high" ? "⚠" : "△"}&gt;${esc(mm)}</span>` : ""}
             </span>
             <span class="district-rain">${esc(range)}<small>mm/${selectedRain}h${r?.dry ? " 推論" : ""}</small></span>
@@ -521,6 +662,7 @@ function renderAll() {
     districtLayer.setStyle(styleFor);
     renderFloodMarkers();
     renderRainAlertMarkers();
+    renderRoad();
     renderAlerts();
     renderWarnings();
     renderSystem();
@@ -533,10 +675,11 @@ async function main() {
     setupTheme();
     $("stationSearch").addEventListener("input", e => renderStationList(e.target.value.trim()));
     try {
-        const [boundary, st, sd] = await Promise.all([
+        const [boundary, st, sd, rd] = await Promise.all([
             loadJSON("data/taoyuan_districts.geojson"),
             loadJSON("data/district_status.json"),
-            loadOptionalJSON("data/stations.json")
+            loadOptionalJSON("data/stations.json"),
+            loadOptionalJSON("data/road_sensors.json")
         ]);
         status = st;
         statusMap = Object.fromEntries(st.districts.map(d => [d.name, d]));
@@ -544,6 +687,8 @@ async function main() {
         selectedRain = st.default_rainfall_hours ?? 1;
         stationData = sd;
         stations = sd?.enabled ? (sd.stations ?? []) : [];
+        roadData = rd;
+        roadSensors = rd?.enabled ? (rd.sensors ?? []) : [];
 
         districtLayer = L.geoJSON(boundary, {
             style: styleFor,
